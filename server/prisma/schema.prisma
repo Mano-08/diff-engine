@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Document {
+  id        String       @id @default(cuid())
+  title     String
+  createdAt DateTime     @default(now())
+  versions  DocVersion[]
+}
+
+model DocVersion {
+  id             String   @id @default(cuid())
+  documentId     String
+  document       Document @relation(fields: [documentId], references: [id])
+  versionNumber  Int
+  status         String   @default("processing") // processing | ready | failed
+  sourceVideoUrl String?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+  steps          Step[]
+}
+
+model Step {
+  id            String     @id @default(cuid())
+  docVersionId  String
+  docVersion    DocVersion @relation(fields: [docVersionId], references: [id])
+  orderIndex    Int
+  title         String
+  bodyText      String
+  screenshotUrl String
+}
