@@ -11,7 +11,7 @@ export async function uploadVideo(
   formData.append("video", file);
   formData.append("title", title);
 
-  const res = await fetch(`${API_BASE}/api/documents`, {
+  const res = await fetch(`${API_BASE}/api/v1/documents`, {
     method: "POST",
     body: formData,
   });
@@ -25,7 +25,7 @@ export async function uploadVideo(
 }
 
 export async function fetchDocument(documentId: string): Promise<Document> {
-  const res = await fetch(`${API_BASE}/api/documents/${documentId}`, {
+  const res = await fetch(`${API_BASE}/api/v1/documents/${documentId}`, {
     cache: "no-store",
   });
 
