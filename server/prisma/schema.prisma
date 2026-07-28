@@ -29,6 +29,11 @@ model DocVersion {
   errorMessage   String?
   createdAt      DateTime @default(now())
   steps          Step[]
+
+  diffsAsOld Diff[] @relation("DiffOldVersion")
+  diffsAsNew Diff[] @relation("DiffNewVersion")
+
+  @@unique([documentId, versionNumber])
 }
 
 model Step {
@@ -39,4 +44,17 @@ model Step {
   title         String
   bodyText      String
   screenshotUrl String
+  embedding     Json?      // array of floats, stored as JSON for SQLite
+}
+
+model Diff {
+  id           String     @id @default(cuid())
+  oldVersionId String
+  oldVersion   DocVersion @relation("DiffOldVersion", fields: [oldVersionId], references: [id])
+  newVersionId String
+  newVersion   DocVersion @relation("DiffNewVersion", fields: [newVersionId], references: [id])
+  stepDiffs    Json
+  createdAt    DateTime   @default(now())
+
+  @@unique([oldVersionId, newVersionId])
 }

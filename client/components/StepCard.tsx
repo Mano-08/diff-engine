@@ -12,12 +12,27 @@ export default function StepCard({ step }: { step: Step }) {
       </div>
 
       <div className="relative w-full aspect-video bg-neutral-100">
-        <Image
-          src={step.screenshotUrl}
-          alt={step.title}
-          fill
-          className="object-contain"
-        />
+        {step.screenshotUrl ? (
+          <Image
+            src={step.screenshotUrl}
+            alt={step.title}
+            fill
+            className="object-contain"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = "none";
+              const fallback = document.createElement("div");
+              fallback.className =
+                "absolute top-0 left-0 w-full h-full flex items-center justify-center bg-neutral-100";
+              fallback.textContent = "Image not available";
+              target.parentNode?.appendChild(fallback);
+            }}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 text-neutral-400 text-xs">
+            Image not available
+          </div>
+        )}
       </div>
 
       <p className="px-5 py-3 text-sm text-neutral-600">{step.bodyText}</p>

@@ -1,27 +1,66 @@
-import fs from "fs";
+import { v2 as cloudinary } from "cloudinary";
 import path from "path";
-import { nanoid } from "nanoid";
 
-// import { uploadFileToR2 } from './storageR2.js'; // <-- swap back in later for R2
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
-const STORAGE_DIR = path.resolve("storage"); // served statically from server.ts
-const PUBLIC_URL_BASE =
-  process.env.PUBLIC_URL_BASE || "http://localhost:4000/files";
+type AssetType = "videos" | "screenshots";
 
-export async function uploadFileToR2(
+interface UploadJobContext {
+  documentId: string;
+  versionId: string;
+  stepIndex?: number; // only relevant for screenshots
+}
+
+// src/services/storage.ts
+export async function uploadFileToCloudinary(
   localFilePath: string,
-  keyPrefix: string,
+  assetType: AssetType,
+  job: UploadJobContext,
+  mimeType?: string, // pass req.file.mimetype for videos, omit for screenshots (always PNG)
 ): Promise<string> {
-  // Keeping the function name the same as the R2 version so routes/documents.ts
-  // doesn't need to change when we swap storage backends later.
-  const ext = path.extname(localFilePath);
-  const destDir = path.join(STORAGE_DIR, keyPrefix);
-  fs.mkdirSync(destDir, { recursive: true });
+  const isVideo = mimeType
+    ? mimeType.startsWith("video/")
+    : [".mp4", ".mov", ".webm"].includes(
+        path.extname(localFilePath).toLowerCase(),
+      );
 
-  const filename = `${nanoid()}${ext}`;
-  const destPath = path.join(destDir, filename);
+  const folder = `diff-engine/${assetType}/${job.documentId}/${job.versionId}`;
+  const publicId =
+    assetType === "videos"
+      ? "source"
+      : `step-${String(job.stepIndex ?? 0).padStart(2, "0")}`;
 
-  fs.copyFileSync(localFilePath, destPath);
+  const result = await cloudinary.uploader.upload(localFilePath, {
+    folder,
+    public_id: publicId,
+    resource_type: isVideo ? "video" : "image",
+    overwrite: true,
+  });
 
-  return `${PUBLIC_URL_BASE}/${keyPrefix}/${filename}`;
+  return result.secure_url;
+}
+
+export async function downloadFromCloudinaryToTemp(
+  url: string,
+  tmpDir: string,
+): Promise<string> {
+  const fs = await import("fs");
+  const { nanoid } = await import("nanoid");
+
+  const res = await fetch(url);
+  if (!res.ok)
+    throw new Error(`Failed to download from Cloudinary: ${res.status}`);
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const ext = path.extname(new URL(url).pathname) || ".png";
+  const localPath = path.join(tmpDir, `${nanoid()}${ext}`);
+
+  fs.mkdirSync(tmpDir, { recursive: true });
+  fs.writeFileSync(localPath, buffer);
+
+  return localPath;
 }

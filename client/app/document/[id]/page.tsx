@@ -1,81 +1,113 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { fetchDocument } from "@/lib/api";
-import type { Document } from "@/lib/types";
-import StepCard from "@/components/StepCard";
-
-const POLL_INTERVAL_MS = 2500;
+import Link from "next/link";
+import { useDocument } from "@/hooks/useDocument";
+import VersionTabs from "@/components/VersionTabs";
+import DocumentVersionView from "@/components/DocumentVersionView";
+import DiffView from "@/components/DiffView";
 
 export default function DocumentPage() {
   const { id } = useParams<{ id: string }>();
-  const [document, setDocument] = useState<Document | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { document, error, refresh } = useDocument(id);
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"document" | "diff">("document");
 
-  const load = useCallback(async () => {
-    try {
-      const doc = await fetchDocument(id);
-      setDocument(doc);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load document");
+  // default to the latest version whenever the doc loads or a new version appears
+  useEffect(() => {
+    if (!document) return;
+    const latest = document.versions[document.versions.length - 1];
+    // if the previously active version no longer exists (was deleted), fall back to latest
+    const stillExists = document.versions.some((v) => v.id === activeVersionId);
+    if (!activeVersionId || !stillExists) {
+      setActiveVersionId(latest.id);
+      setViewMode("document");
     }
-  }, [id]);
+  }, [document, activeVersionId]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  if (error) return <CenteredMessage text={error} isError />;
+  if (!document) return <CenteredMessage text="Loading..." />;
 
-  useEffect(() => {
-    const latestVersion = document?.versions[0];
-    if (!latestVersion || latestVersion.status !== "processing") return;
-
-    const interval = setInterval(load, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [document, load]);
-
-  if (error) {
-    return <CenteredMessage text={error} isError />;
-  }
-
-  if (!document) {
-    return <CenteredMessage text="Loading..." />;
-  }
-
-  const version = document.versions[0];
-
-  if (!version || version.status === "processing") {
-    return (
-      <CenteredMessage text="Generating your document — extracting steps from the recording..." />
-    );
-  }
-
-  if (version.status === "failed") {
-    return (
-      <CenteredMessage
-        text={`Generation failed: ${version.errorMessage ?? "unknown error"}`}
-        isError
-      />
-    );
-  }
+  const activeVersion =
+    document.versions.find((v) => v.id === activeVersionId) ??
+    document.versions[document.versions.length - 1];
+  const activeVersionIndex = document.versions.findIndex(
+    (v) => v.id === activeVersion.id,
+  );
+  const canShowDiff =
+    activeVersionIndex > 0 && activeVersion.status === "ready";
 
   return (
-    <main className="min-h-screen bg-neutral-50 px-4 py-12">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-semibold text-neutral-900 mb-1">
+    <div className="flex flex-col h-full">
+      <nav className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white">
+        <h1 className="text-sm font-semibold text-neutral-900">
           {document.title}
         </h1>
-        <p className="text-sm text-neutral-500 mb-8">
-          {version.steps.length} steps generated from your recording
-        </p>
+        <Link
+          href={`/document/${id}/regenerate`}
+          className="px-3 py-1.5 rounded-lg bg-neutral-900 text-white text-xs font-medium hover:bg-neutral-800"
+        >
+          Regenerate document
+        </Link>
+      </nav>
+      <VersionTabs
+        documentId={id}
+        versions={document.versions}
+        activeVersionId={activeVersion.id}
+        onSelect={(vid) => {
+          setActiveVersionId(vid);
+          setViewMode("document");
+        }}
+        onVersionDeleted={refresh}
+      />
 
-        <div className="space-y-6">
-          {version.steps.map((step) => (
-            <StepCard key={step.id} step={step} />
-          ))}
+      {canShowDiff && (
+        <div className="flex gap-1 px-6 pt-3">
+          <ToggleButton
+            active={viewMode === "document"}
+            onClick={() => setViewMode("document")}
+            label="Document"
+          />
+          <ToggleButton
+            active={viewMode === "diff"}
+            onClick={() => setViewMode("diff")}
+            label="What changed"
+          />
         </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        {viewMode === "diff" && canShowDiff ? (
+          <DiffView documentId={id} versionId={activeVersion.id} />
+        ) : (
+          <DocumentVersionView version={activeVersion} />
+        )}
       </div>
-    </main>
+    </div>
+  );
+}
+
+function ToggleButton({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1 text-xs font-medium rounded-md ${
+        active
+          ? "bg-neutral-900 text-white"
+          : "text-neutral-500 hover:bg-neutral-100"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -87,10 +119,10 @@ function CenteredMessage({
   isError?: boolean;
 }) {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
+    <div className="h-full flex items-center justify-center">
       <p className={`text-sm ${isError ? "text-red-600" : "text-neutral-500"}`}>
         {text}
       </p>
-    </main>
+    </div>
   );
 }
