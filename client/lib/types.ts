@@ -1,3 +1,5 @@
+import { JSONContent } from "@tiptap/react";
+
 export type DocVersionStatus = "processing" | "ready" | "failed";
 
 export interface Step {
@@ -16,6 +18,7 @@ export interface DocVersion {
   errorMessage: string | null;
   createdAt: string;
   steps: Step[];
+  contentJson: JSONContent | null; // saved editor state — null until the user's first edit persists
 }
 
 export interface Document {

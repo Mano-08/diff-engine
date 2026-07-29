@@ -87,3 +87,46 @@ export async function deleteVersion(
     throw new Error(body.error || `Delete failed: ${res.status}`);
   }
 }
+
+export type AiActionType = "rewrite" | "expand" | "simplify";
+
+export async function callAiRewriteApi(
+  text: string,
+  action: AiActionType,
+): Promise<string> {
+  const API_BASE =
+    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+
+  const res = await fetch(`${API_BASE}/api/v1/ai/rewrite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, action }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`AI rewrite failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.newText as string;
+}
+
+// lib/api.ts — add
+// lib/api.ts
+export async function saveDocumentContent(
+  documentId: string,
+  versionId: string,
+  contentJson: object,
+): Promise<void> {
+  const API_BASE =
+    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+  const res = await fetch(
+    `${API_BASE}/api/documents/${documentId}/versions/${versionId}/content`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: contentJson }),
+    },
+  );
+  if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
+}

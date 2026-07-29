@@ -15,7 +15,7 @@ export default function StepCard({ step }: { step: Step }) {
         {step.screenshotUrl ? (
           <Image
             src={step.screenshotUrl}
-            alt={step.title}
+            alt={step.title || ""}
             fill
             className="object-contain"
             onError={(e) => {

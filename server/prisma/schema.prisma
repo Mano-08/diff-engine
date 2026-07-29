@@ -27,6 +27,7 @@ model DocVersion {
   status         String   @default("processing") // processing | ready | failed
   sourceVideoUrl String?
   errorMessage   String?
+  contentJson    Json?
   createdAt      DateTime @default(now())
   steps          Step[]
 

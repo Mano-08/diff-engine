@@ -81,7 +81,10 @@ export default function DocumentPage() {
         {viewMode === "diff" && canShowDiff ? (
           <DiffView documentId={id} versionId={activeVersion.id} />
         ) : (
-          <DocumentVersionView version={activeVersion} />
+          <DocumentVersionView
+            version={activeVersion}
+            documentId={document.id}
+          />
         )}
       </div>
     </div>

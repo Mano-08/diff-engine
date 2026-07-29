@@ -39,3 +39,8 @@ body {
   background-color: #fafafa; /* matches bg-neutral-50 used across pages */
   color: #171717; /* matches text-neutral-900 */
 }
+
+.ProseMirror ul li::marker,
+.ProseMirror ol li::marker {
+  color: theme("colors.neutral.900");
+}
