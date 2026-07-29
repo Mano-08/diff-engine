@@ -2,15 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { diffWords } from "diff";
 import { fetchDiff } from "@/lib/api";
 import type { DiffResult, StepDiffEntry } from "@/lib/types";
-
-const badgeStyles: Record<StepDiffEntry["type"], string> = {
-  unchanged: "bg-neutral-100 text-neutral-500",
-  modified: "bg-amber-100 text-amber-700",
-  added: "bg-green-100 text-green-700",
-  removed: "bg-red-100 text-red-700",
-};
 
 export default function DiffView({
   documentId,
@@ -23,11 +17,18 @@ export default function DiffView({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     fetchDiff(documentId, versionId)
-      .then(setDiff)
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load diff"),
-      );
+      .then((result) => {
+        if (!cancelled) setDiff(result);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load diff");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [documentId, versionId]);
 
   if (error) return <p className="text-sm text-red-600 px-6 py-8">{error}</p>;
@@ -37,67 +38,154 @@ export default function DiffView({
     );
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
+    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
       {diff.stepDiffs.map((entry, i) => (
-        <div
-          key={i}
-          className="border border-neutral-200 rounded-xl overflow-hidden bg-white"
-        >
-          <div className="px-5 py-2.5 border-b border-neutral-100 flex items-center gap-2">
-            <span
-              className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded ${badgeStyles[entry.type]}`}
-            >
-              {entry.type}
-            </span>
-            <h3 className="text-sm font-semibold text-neutral-900">
-              {entry.newStep?.title ?? entry.oldStep?.title}
-            </h3>
-          </div>
-
-          {entry.type === "modified" && entry.oldStep && entry.newStep && (
-            <div className="grid grid-cols-2 gap-px bg-neutral-200">
-              <div className="relative aspect-video bg-neutral-100">
-                <Image
-                  src={entry.oldStep.screenshotUrl}
-                  alt="before"
-                  fill
-                  className="object-contain opacity-70"
-                />
-                <span className="absolute top-2 left-2 text-[10px] bg-white/90 px-1.5 py-0.5 rounded">
-                  before
-                </span>
-              </div>
-              <div className="relative aspect-video bg-neutral-100">
-                <Image
-                  src={entry.newStep.screenshotUrl}
-                  alt="after"
-                  fill
-                  className="object-contain"
-                />
-                <span className="absolute top-2 left-2 text-[10px] bg-white/90 px-1.5 py-0.5 rounded">
-                  after
-                </span>
-              </div>
-            </div>
-          )}
-
-          {entry.type !== "modified" &&
-            (entry.newStep ?? entry.oldStep)?.screenshotUrl && (
-              <div className="relative aspect-video bg-neutral-100">
-                <Image
-                  src={(entry.newStep ?? entry.oldStep)!.screenshotUrl}
-                  alt="step"
-                  fill
-                  className={`object-contain ${entry.type === "removed" ? "opacity-50" : ""}`}
-                />
-              </div>
-            )}
-
-          <p className="px-5 py-3 text-sm text-neutral-600">
-            {entry.newStep?.bodyText ?? entry.oldStep?.bodyText}
-          </p>
-        </div>
+        <DiffStepEntry key={i} entry={entry} />
       ))}
     </div>
+  );
+}
+
+function DiffStepEntry({ entry }: { entry: StepDiffEntry }) {
+  if (entry.type === "unchanged") {
+    return (
+      <div>
+        <h3 className="text-base font-semibold text-neutral-900 mb-2">
+          {entry.newStep?.title}
+        </h3>
+        {entry.newStep?.screenshotUrl && (
+          <div className="relative w-full aspect-video rounded-md overflow-hidden mb-2">
+            <Image
+              src={entry.newStep.screenshotUrl}
+              alt={entry.newStep.title}
+              fill
+              className="object-contain"
+            />
+          </div>
+        )}
+        <p className="text-sm text-neutral-600 leading-relaxed">
+          {entry.newStep?.bodyText}
+        </p>
+      </div>
+    );
+  }
+
+  if (entry.type === "removed") {
+    return (
+      <div>
+        <h3 className="text-base font-semibold text-neutral-900 mb-2 bg-red-500/20">
+          {entry.oldStep?.title}
+        </h3>
+        {entry.oldStep?.screenshotUrl && (
+          <div className="relative w-full aspect-video rounded-md overflow-hidden mb-2 border-2 border-red-500/20">
+            <Image
+              src={entry.oldStep.screenshotUrl}
+              alt={entry.oldStep.title}
+              fill
+              className="object-contain"
+            />
+          </div>
+        )}
+        <p className="text-sm text-neutral-600 leading-relaxed bg-red-500/20">
+          {entry.oldStep?.bodyText}
+        </p>
+      </div>
+    );
+  }
+
+  if (entry.type === "added") {
+    return (
+      <div>
+        <h3 className="text-base font-semibold text-neutral-900 mb-2 bg-green-500/20">
+          {entry.newStep?.title}
+        </h3>
+        {entry.newStep?.screenshotUrl && (
+          <div className="relative w-full aspect-video rounded-md overflow-hidden mb-2 border-2 border-green-500/20">
+            <Image
+              src={entry.newStep.screenshotUrl}
+              alt={entry.newStep.title}
+              fill
+              className="object-contain"
+            />
+          </div>
+        )}
+        <p className="text-sm text-neutral-600 leading-relaxed bg-green-500/20">
+          {entry.newStep?.bodyText}
+        </p>
+      </div>
+    );
+  }
+
+  // modified — word-level inline diff for title and body, before/after border for image
+  return (
+    <div>
+      <h3 className="text-base font-semibold text-neutral-900 mb-2">
+        <WordDiff
+          oldText={entry.oldStep?.title ?? ""}
+          newText={entry.newStep?.title ?? ""}
+        />
+      </h3>
+
+      {(entry.oldStep?.screenshotUrl || entry.newStep?.screenshotUrl) && (
+        <div className="flex gap-2 mb-2">
+          {entry.oldStep?.screenshotUrl && (
+            <div className="relative flex-1 aspect-video rounded-md overflow-hidden border-2 border-red-500/20">
+              <Image
+                src={entry.oldStep.screenshotUrl}
+                alt="before"
+                fill
+                className="object-contain"
+              />
+            </div>
+          )}
+          {entry.newStep?.screenshotUrl && (
+            <div className="relative flex-1 aspect-video rounded-md overflow-hidden border-2 border-green-500/20">
+              <Image
+                src={entry.newStep.screenshotUrl}
+                alt="after"
+                fill
+                className="object-contain"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="text-sm text-neutral-600 leading-relaxed">
+        <WordDiff
+          oldText={entry.oldStep?.bodyText ?? ""}
+          newText={entry.newStep?.bodyText ?? ""}
+        />
+      </p>
+    </div>
+  );
+}
+
+function WordDiff({ oldText, newText }: { oldText: string; newText: string }) {
+  const parts = diffWords(oldText, newText);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.added) {
+          return (
+            <span key={i} className="bg-green-500/20">
+              {part.value}
+            </span>
+          );
+        }
+        if (part.removed) {
+          return (
+            <span
+              key={i}
+              className="bg-red-500/20 line-through decoration-red-700/40"
+            >
+              {part.value}
+            </span>
+          );
+        }
+        return <span key={i}>{part.value}</span>;
+      })}
+    </>
   );
 }

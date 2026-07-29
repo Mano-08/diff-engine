@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { bricolageGrotesque } from "./fonts";
 
 export default function HomePage() {
   return (
     <main className="h-full flex items-center justify-center">
       <div className="text-center">
-        <h1 className="text-xl font-semibold text-neutral-900 mb-2">
+        <h1
+          className={`text-2xl font-semibold text-neutral-900 mb-2 ${bricolageGrotesque.className}`}
+        >
           Turn recordings into documentation
         </h1>
         <p className="text-sm text-neutral-500 mb-6 max-w-sm">

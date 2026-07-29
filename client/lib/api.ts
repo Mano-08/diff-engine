@@ -121,7 +121,7 @@ export async function saveDocumentContent(
   const API_BASE =
     process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
   const res = await fetch(
-    `${API_BASE}/api/documents/${documentId}/versions/${versionId}/content`,
+    `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/content`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
