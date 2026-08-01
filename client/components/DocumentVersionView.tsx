@@ -56,6 +56,7 @@ export default function DocumentVersionView({
       <NotionEditor
         initialContent={version.contentJson ?? stepsToInitialDoc(version.steps)}
         onChange={debouncedSave}
+        documentTitle={document.title}
       />
     </div>
   );

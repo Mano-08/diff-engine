@@ -8,11 +8,13 @@ import Toolbar from "./Toolbar";
 interface NotionEditorProps {
   initialContent?: JSONContent | null;
   onChange?: (json: JSONContent) => void;
+  documentTitle: string;
 }
 
 export default function NotionEditor({
   initialContent,
   onChange,
+  documentTitle,
 }: NotionEditorProps) {
   const editor = useEditor({
     extensions: documentExtensions,
@@ -39,7 +41,7 @@ export default function NotionEditor({
 
   return (
     <div>
-      <Toolbar editor={editor} />
+      <Toolbar editor={editor} documentTitle={documentTitle} />
       <div className="max-w-2xl mx-auto px-4 py-10">
         <EditorContent
           editor={editor}

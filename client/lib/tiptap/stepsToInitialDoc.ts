@@ -6,25 +6,27 @@ export function stepsToInitialDoc(steps: Step[]): JSONContent {
   const content: JSONContent[] = [];
 
   steps.forEach((step, i) => {
-    content.push({
-      type: "heading",
-      attrs: { level: 1 },
-      content: i === 0 ? [{ type: "text", text: step.title }] : undefined,
-    });
-    if (i > 0) {
-      // subsequent steps become bolded lead-in text rather than more h1s,
-      // since the schema only really supports one true title —
-      // simplest honest choice given the "one heading" constraint
+    if (i === 0) {
+      // only the very first step's title becomes the document's actual h1
+      content.push({
+        type: "heading",
+        attrs: { level: 1 },
+        content: step.title ? [{ type: "text", text: step.title }] : undefined,
+      });
+    } else {
+      // subsequent steps: title becomes bold lead-in text, NOT a heading node
       content.push({
         type: "paragraph",
-        content: [
-          { type: "text", marks: [{ type: "bold" }], text: step.title },
-        ],
+        content: step.title
+          ? [{ type: "text", marks: [{ type: "bold" }], text: step.title }]
+          : undefined,
       });
     }
+
     if (step.screenshotUrl) {
       content.push({ type: "image", attrs: { src: step.screenshotUrl } });
     }
+
     content.push({
       type: "paragraph",
       content: step.bodyText
