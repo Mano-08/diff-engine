@@ -113,6 +113,24 @@ export async function callAiRewriteApi(
 
 // lib/api.ts — add
 // lib/api.ts
+// export async function saveDocumentContent(
+//   documentId: string,
+//   versionId: string,
+//   contentJson: object,
+// ): Promise<void> {
+//   const API_BASE =
+//     process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+//   const res = await fetch(
+//     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/content`,
+//     {
+//       method: "PATCH",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ content: contentJson }),
+//     },
+//   );
+//   if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
+// }
+
 export async function saveDocumentContent(
   documentId: string,
   versionId: string,
@@ -120,6 +138,7 @@ export async function saveDocumentContent(
 ): Promise<void> {
   const API_BASE =
     process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+
   const res = await fetch(
     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/content`,
     {
@@ -128,5 +147,8 @@ export async function saveDocumentContent(
       body: JSON.stringify({ content: contentJson }),
     },
   );
-  if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
+
+  if (!res.ok) {
+    throw new Error(`Failed to save: ${res.status}`);
+  }
 }

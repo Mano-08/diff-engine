@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDocumentsList } from "@/hooks/useDocumentsList";
 import { bricolageGrotesque } from "@/app/fonts";
-import { Book } from "lucide-react";
+import { Birdhouse, Book, House } from "lucide-react";
 
 export default function Sidebar() {
   const { documents } = useDocumentsList();
@@ -17,7 +17,7 @@ export default function Sidebar() {
           href="/"
           className={`text-md flex flex-row items-center gap-1 font-semibold text-neutral-900 hover:text-neutral-600 ${bricolageGrotesque.className}`}
         >
-          <Book color="#da5cc7" strokeWidth={2.8} size={16} /> Clueso Docs
+          <House color="#da5cc7" strokeWidth={2.8} size={16} /> Home
         </Link>
       </div>
 

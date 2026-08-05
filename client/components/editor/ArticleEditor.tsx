@@ -16,7 +16,7 @@ import {
   StepTitle,
 } from "@/lib/tiptap/StepNode";
 import { AiRewriteExtension } from "@/lib/tiptap/AiRewriteExtension";
-import SelectionToolbar from "./SelectionToolbar";
+// import SelectionToolbar from "./SelectionToolbar";
 import { saveDocumentContent } from "@/lib/api";
 import type { Step } from "@/lib/types";
 
@@ -67,7 +67,11 @@ export default function ArticleEditor({
       Color,
       Highlight,
       StepImage,
-      StepTitle, // ← must be registered, not just StepNode
+      StepTitle.configure({
+        HTMLAttributes: {
+          class: "step-title",
+        },
+      }), // ← must be registered, not just StepNode
       StepBody,
       StepNode,
       AiRewriteExtension,

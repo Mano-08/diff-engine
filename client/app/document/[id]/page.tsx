@@ -46,7 +46,7 @@ export default function DocumentPage() {
         </h1>
         <Link
           href={`/document/${id}/regenerate`}
-          className="px-3 py-1.5 rounded-lg bg-neutral-900 text-white text-xs font-medium hover:bg-neutral-800"
+          className="px-3 py-1.5 rounded-lg bg-[#DA5CC7] text-white text-xs font-medium hover:bg-[#DA5CC7]/90"
         >
           Regenerate document
         </Link>
@@ -83,6 +83,7 @@ export default function DocumentPage() {
         ) : (
           <DocumentVersionView
             version={activeVersion}
+            documentTitle={document.title}
             documentId={document.id}
           />
         )}

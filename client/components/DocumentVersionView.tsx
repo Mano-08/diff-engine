@@ -5,13 +5,16 @@ import { stepsToInitialDoc } from "@/lib/tiptap/stepsToInitialDoc";
 import type { DocVersion } from "@/lib/types";
 import { debounce } from "lodash";
 import { useMemo } from "react";
+import FloatingVideoPlayer from "./editor/FloatingVideoPlayer";
 
 export default function DocumentVersionView({
   version,
+  documentTitle,
   documentId,
 }: {
   version: DocVersion;
   documentId: string;
+  documentTitle: string;
 }) {
   const debouncedSave = useMemo(
     () =>
@@ -43,21 +46,14 @@ export default function DocumentVersionView({
 
   return (
     <div>
-      {version.sourceVideoUrl && (
-        <div className="max-w-2xl mx-auto px-4 pt-8">
-          <video
-            src={version.sourceVideoUrl}
-            controls
-            className="w-full rounded-lg bg-black"
-          />
-        </div>
-      )}
-
       <NotionEditor
         initialContent={version.contentJson ?? stepsToInitialDoc(version.steps)}
         onChange={debouncedSave}
-        documentTitle={document.title}
+        documentTitle={documentTitle}
       />
+      {version.sourceVideoUrl && (
+        <FloatingVideoPlayer videoUrl={version.sourceVideoUrl} />
+      )}
     </div>
   );
 }

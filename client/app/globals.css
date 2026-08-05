@@ -44,3 +44,36 @@ body {
 .ProseMirror ol li::marker {
   color: theme("colors.neutral.900");
 }
+
+button:active {
+  transform: scale(0.98);
+}
+
+.tiptap p strong {
+  font-size: 20px;
+}
+
+.tiptap p:has(strong) {
+  margin-top: 30px;
+}
+
+.tiptap p,
+.tiptap img {
+  margin-left: -8px;
+  margin-right: -8px;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  padding: 7px;
+  border-radius: 7px;
+  transition: background-color 150ms ease;
+}
+
+.tiptap p:hover,
+.tiptap h1:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.tiptap img:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+}
