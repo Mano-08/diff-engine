@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
@@ -7,11 +8,14 @@ import type {
   UploadResponse,
   DiffResult,
 } from "./types";
+import { showUnauthorizedToast } from "@/components/loginToast";
 
 export async function listDocuments(): Promise<DocumentSummary[]> {
   const res = await fetch(`${API_BASE}/api/v1/documents`, {
     cache: "no-store",
+    credentials: "include",
   });
+  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) throw new Error(`Failed to list documents: ${res.status}`);
   return res.json();
 }
@@ -19,7 +23,9 @@ export async function listDocuments(): Promise<DocumentSummary[]> {
 export async function fetchDocument(documentId: string): Promise<Document> {
   const res = await fetch(`${API_BASE}/api/v1/documents/${documentId}`, {
     cache: "no-store",
+    credentials: "include",
   });
+  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) throw new Error(`Failed to fetch document: ${res.status}`);
   return res.json();
 }
@@ -35,7 +41,9 @@ export async function createDocument(
   const res = await fetch(`${API_BASE}/api/v1/documents`, {
     method: "POST",
     body: formData,
+    credentials: "include",
   });
+  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   return res.json();
 }
@@ -53,8 +61,10 @@ export async function regenerateDocument(
     {
       method: "POST",
       body: formData,
+      credentials: "include",
     },
   );
+  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) throw new Error(`Regenerate failed: ${res.status}`);
   return res.json();
 }
@@ -65,8 +75,9 @@ export async function fetchDiff(
 ): Promise<DiffResult> {
   const res = await fetch(
     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/diff`,
-    { cache: "no-store" },
+    { cache: "no-store", credentials: "include" },
   );
+  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) throw new Error(`Failed to fetch diff: ${res.status}`);
   return res.json();
 }
@@ -80,8 +91,10 @@ export async function deleteVersion(
     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}`,
     {
       method: "DELETE",
+      credentials: "include",
     },
   );
+  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Delete failed: ${res.status}`);
@@ -101,7 +114,9 @@ export async function callAiRewriteApi(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, action }),
+    credentials: "include",
   });
+  if (res.status === 401) showUnauthorizedToast();
 
   if (!res.ok) {
     throw new Error(`AI rewrite failed: ${res.status}`);
@@ -145,9 +160,11 @@ export async function saveDocumentContent(
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: contentJson }),
+      credentials: "include",
     },
   );
 
+  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) {
     throw new Error(`Failed to save: ${res.status}`);
   }

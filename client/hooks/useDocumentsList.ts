@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { listDocuments } from "@/lib/api";
 import type { DocumentSummary } from "@/lib/types";
 
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_MS = 12000;
 
 export function useDocumentsList() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);

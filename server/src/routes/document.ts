@@ -93,6 +93,52 @@ router.post(
   },
 );
 
+router.patch(
+  "/:id/versions/:versionId/content",
+  async (req: Request, res: Response) => {
+    const { id: documentId, versionId } = req.params;
+    const { content } = req.body as { content?: unknown };
+
+    if (typeof documentId !== "string") {
+      res.status(400).json({ error: "invalid document id" });
+      return;
+    }
+
+    if (typeof versionId !== "string") {
+      res.status(400).json({ error: "invalid version id" });
+      return;
+    }
+
+    if (!content || typeof content !== "object") {
+      res
+        .status(400)
+        .json({ error: "content (ProseMirror JSON object) is required" });
+      return;
+    }
+
+    const version = await prisma.docVersion.findFirst({
+      where: { id: versionId, documentId },
+    });
+
+    if (!version) {
+      res.status(404).json({ error: "version not found" });
+      return;
+    }
+
+    try {
+      await prisma.docVersion.update({
+        where: { id: versionId },
+        data: { contentJson: content as unknown as Prisma.InputJsonValue },
+      });
+
+      res.status(204).send();
+    } catch (err) {
+      console.error("Failed to save document content:", err);
+      res.status(500).json({ error: "failed to save content" });
+    }
+  },
+);
+
 // ── GET /api/documents/:id — full document, ALL versions, each with steps ──
 router.get("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
