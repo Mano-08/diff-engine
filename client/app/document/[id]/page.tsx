@@ -63,7 +63,7 @@ export default function DocumentPage() {
       />
 
       {canShowDiff && (
-        <div className="flex gap-1 px-6 pt-3">
+        <div className="flex gap-1 px-6 py-3 bg-white shadow">
           <ToggleButton
             active={viewMode === "document"}
             onClick={() => setViewMode("document")}

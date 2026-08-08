@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import fs from "fs";
 import { prisma } from "../db/prisma.js";
-import { extractKeyFrames } from "../services/video";
+import { ExtractedFrame, extractKeyFrames } from "../services/video";
 import { structureStepsFromFramesBatched } from "../services/structuring.js";
 import { embedTexts } from "../services/embeddings.js";
 import { generateStepDiffs } from "../services/diffing.js";
@@ -10,6 +10,8 @@ import type { StepDiffEntry, StepWithScreenshot } from "../types.js";
 import { Prisma, Step } from "../../generated/prisma/client.js";
 import { InputJsonValue } from "@prisma/client/runtime/client";
 import { uploadFileToCloudinary } from "../services/storage.js";
+import { v2 as cloudinary } from "cloudinary";
+import { getAudioDerivedTimestamps } from "../services/audioProcessor.js";
 
 function toJson<T>(value: T): Prisma.InputJsonValue {
   return value as unknown as Prisma.InputJsonValue;
@@ -352,83 +354,89 @@ async function processVideoIntoDoc(
   versionId: string,
   videoMimeType: string,
 ): Promise<void> {
-  // 1. upload raw video to Cloudinary
-  const videoUrl = await uploadFileToCloudinary(
-    localVideoPath,
-    "videos",
-    { documentId, versionId },
-    videoMimeType,
-  );
-  await prisma.docVersion.update({
-    where: { id: versionId },
-    data: { sourceVideoUrl: videoUrl },
-  });
+  let frames: ExtractedFrame[] = [];
 
-  // 2. derive candidate timestamps from narration audio (best-effort — degrades gracefully)
-  const { timestamps: audioTimestamps, transcript } =
-    await getAudioDerivedTimestamps(localVideoPath).catch((err) => {
-      console.error("Audio transcription failed, continuing visual-only:", err);
-      return { timestamps: [], transcript: [] };
+  try {
+    // 1. Upload raw video
+    const videoUrl = await uploadFileToCloudinary(
+      localVideoPath,
+      "videos",
+      { documentId, versionId },
+      videoMimeType,
+    );
+    await prisma.docVersion.update({
+      where: { id: versionId },
+      data: { sourceVideoUrl: videoUrl },
     });
 
-  // 3. extract settled keyframes — called ONCE, result reused throughout
-  const frames = await extractKeyFrames(localVideoPath, audioTimestamps);
+    // 2. Audio processing (graceful fallback)
+    const { timestamps: audioTimestamps, transcript } =
+      await getAudioDerivedTimestamps(localVideoPath).catch((err) => {
+        console.error(
+          "Audio transcription failed, continuing visual-only:",
+          err,
+        );
+        return { timestamps: [], transcript: [] };
+      });
 
-  // 4. structure frames (+ transcript context) into steps via Claude
-  const structuredSteps = await structureStepsFromFramesBatched(
-    frames,
-    transcript,
-  );
+    // 3. Frame extraction
+    frames = await extractKeyFrames(localVideoPath, audioTimestamps);
 
-  // 5. upload only the frames selected as steps
-  const stepsWithUrls: StepWithScreenshot[] = [];
-  for (let i = 0; i < structuredSteps.length; i++) {
-    const step = structuredSteps[i];
-    const frame = frames[step.frame_index]; // same `frames` array used in step 4 — indices now actually correspond
-    const screenshotUrl = await uploadFileToCloudinary(
-      frame.path,
-      "screenshots",
-      { documentId, versionId, stepIndex: i },
-      // no mimetype override needed — uploadFileToCloudinary defaults to image detection for non-video paths
+    // 4. Structure steps with Claude
+    const structuredSteps = await structureStepsFromFramesBatched(
+      frames,
+      transcript,
     );
-    stepsWithUrls.push({ ...step, screenshotUrl });
-  }
 
-  // 6. embed step text for later diffing
-  const embeddings = await embedTexts(
-    stepsWithUrls.map((s) => `${s.title}. ${s.body_text}`),
-  );
+    // 5. Upload selected screenshots concurrently with index safety
+    const stepsWithUrls = await Promise.all(
+      structuredSteps.map(async (step, i) => {
+        // Clamp index bounds to prevent runtime crashes from LLM response anomalies
+        const safeIndex = Math.min(
+          Math.max(0, step.frame_index),
+          frames.length - 1,
+        );
+        const frame = frames[safeIndex];
 
-  // 7. persist steps atomically
-  await prisma.$transaction(
-    stepsWithUrls.map((step, i) =>
-      prisma.step.create({
-        data: {
-          docVersionId: versionId,
-          orderIndex: i,
-          title: step.title,
-          bodyText: step.body_text,
-          screenshotUrl: step.screenshotUrl,
-          embedding: embeddings[i],
-        },
+        const screenshotUrl = await uploadFileToCloudinary(
+          frame.path,
+          "screenshots",
+          { documentId, versionId, stepIndex: i },
+        );
+        return { ...step, screenshotUrl };
       }),
-    ),
-  );
+    );
 
-  await prisma.docVersion.update({
-    where: { id: versionId },
-    data: { status: "ready" },
-  });
+    // 6. Generate embeddings
+    const embeddings = await embedTexts(
+      stepsWithUrls.map((s) => `${s.title}. ${s.body_text}`),
+    );
 
-  // 8. cleanup local temp files
-  fs.unlinkSync(localVideoPath);
-  frames.forEach((f) => {
-    try {
-      fs.unlinkSync(f.path);
-    } catch {
-      /* already removed */
-    }
-  });
+    // 7. Atomic DB persistence
+    await prisma.$transaction(
+      stepsWithUrls.map((step, i) =>
+        prisma.step.create({
+          data: {
+            docVersionId: versionId,
+            orderIndex: i,
+            title: step.title,
+            bodyText: step.body_text,
+            screenshotUrl: step.screenshotUrl,
+            embedding: embeddings[i],
+          },
+        }),
+      ),
+    );
+
+    await prisma.docVersion.update({
+      where: { id: versionId },
+      data: { status: "ready" },
+    });
+  } finally {
+    // 8. Guaranteed cleanup even if job fails mid-way
+    fs.promises.unlink(localVideoPath).catch(() => {});
+    frames.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
+  }
 }
 
 async function markVersionFailed(
@@ -441,9 +449,6 @@ async function markVersionFailed(
     data: { status: "failed", errorMessage: message },
   });
 }
-
-import { v2 as cloudinary } from "cloudinary";
-import { getAudioDerivedTimestamps } from "../services/audioProcessor.js";
 
 // ── DELETE /api/documents/:id/versions/:versionId ──
 router.delete(

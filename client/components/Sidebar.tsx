@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDocumentsList } from "@/hooks/useDocumentsList";
 import { bricolageGrotesque } from "@/app/fonts";
-import { Birdhouse, Book, House } from "lucide-react";
+import { House } from "lucide-react";
 
 export default function Sidebar() {
   const { documents } = useDocumentsList();

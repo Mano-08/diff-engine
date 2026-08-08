@@ -13,7 +13,7 @@ export interface TranscriptSegment {
 }
 
 // Checks whether the video actually has an audio stream before attempting extraction
-export function hasAudioTrack(videoPath: string): Promise<boolean> {
+function hasAudioTrack(videoPath: string): Promise<boolean> {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
       if (err) return reject(err);
@@ -23,7 +23,7 @@ export function hasAudioTrack(videoPath: string): Promise<boolean> {
   });
 }
 
-export function extractAudioTrack(videoPath: string): Promise<string> {
+function extractAudioTrack(videoPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(TMP_DIR, { recursive: true });
     const outputPath = path.join(TMP_DIR, `${nanoid()}.mp3`);
@@ -38,41 +38,19 @@ export function extractAudioTrack(videoPath: string): Promise<string> {
   });
 }
 
-export function audioSegmentsToTimestamps(
-  segments: TranscriptSegment[],
-): number[] {
+function audioSegmentsToTimestamps(segments: TranscriptSegment[]): number[] {
   return segments.map((s) => s.endSec);
 }
 
-export async function getAudioDerivedTimestamps(videoPath: string): Promise<{
-  timestamps: number[];
-  transcript: TranscriptSegment[];
-}> {
-  const hasAudio = await hasAudioTrack(videoPath).catch(() => false); // ffprobe failure → assume no audio, don't crash
-
-  if (!hasAudio) {
-    console.log("No audio track detected — proceeding visual-only.");
-    return { timestamps: [], transcript: [] };
-  }
-
-  const audioPath = await extractAudioTrack(videoPath);
-
-  try {
-    const transcript = await transcribeWithTimestamps(audioPath);
-    return { timestamps: audioSegmentsToTimestamps(transcript), transcript };
-  } finally {
-    fs.unlinkSync(audioPath);
-  }
-}
-export async function transcribeWithTimestamps(
+async function transcribeWithTimestamps(
   audioPath: string,
 ): Promise<TranscriptSegment[]> {
+  const fileBuffer = await fs.promises.readFile(audioPath);
   const formData = new FormData();
-  formData.append("file", new Blob([fs.readFileSync(audioPath)]), "audio.mp3");
+  formData.append("file", new Blob([fileBuffer]), "audio.mp3");
   formData.append("model", "whisper-1");
   formData.append("response_format", "verbose_json"); // gives per-segment timestamps
   formData.append("timestamp_granularities[]", "segment");
-  formData.append("file", new Blob([fs.readFileSync(audioPath)]), "audio.wav");
 
   const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
@@ -95,4 +73,29 @@ export async function transcribeWithTimestamps(
     startSec: s.start,
     endSec: s.end,
   }));
+}
+
+export async function getAudioDerivedTimestamps(videoPath: string): Promise<{
+  timestamps: number[];
+  transcript: TranscriptSegment[];
+}> {
+  const hasAudio = await hasAudioTrack(videoPath).catch(() => false); // ffprobe failure → assume no audio, don't crash
+
+  if (!hasAudio) {
+    console.log("No audio track detected — proceeding visual-only.");
+    return { timestamps: [], transcript: [] };
+  }
+
+  const audioPath = await extractAudioTrack(videoPath);
+
+  try {
+    const transcript = await transcribeWithTimestamps(audioPath);
+    return { timestamps: audioSegmentsToTimestamps(transcript), transcript };
+  } finally {
+    try {
+      await fs.promises.unlink(audioPath);
+    } catch (err) {
+      console.warn("Failed to remove temporary audio file:", err);
+    }
+  }
 }
