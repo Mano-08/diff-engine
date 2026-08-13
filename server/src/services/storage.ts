@@ -7,7 +7,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-type AssetType = "videos" | "screenshots";
+type AssetType = "video" | "screenshots";
 
 interface UploadJobContext {
   documentId: string;
@@ -15,7 +15,6 @@ interface UploadJobContext {
   stepIndex?: number; // only relevant for screenshots
 }
 
-// src/services/storage.ts
 export async function uploadFileToCloudinary(
   localFilePath: string,
   assetType: AssetType,
@@ -30,7 +29,7 @@ export async function uploadFileToCloudinary(
 
   const folder = `diff-engine/${assetType}/${job.documentId}/${job.versionId}`;
   const publicId =
-    assetType === "videos"
+    assetType === "video"
       ? "source"
       : `step-${String(job.stepIndex ?? 0).padStart(2, "0")}`;
 

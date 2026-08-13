@@ -46,7 +46,7 @@ export default function VersionTabs({
 
   return (
     <div className="border-b border-neutral-200">
-      <div className="flex items-center gap-1 px-6">
+      <div className="flex items-center gap-1 px-6 bg-white">
         {versions.map((v) => {
           const isActive = v.id === activeVersionId;
           const isLatest = v.id === latestVersion.id;

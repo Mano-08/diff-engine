@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDocumentsList } from "@/hooks/useDocumentsList";
 import { bricolageGrotesque } from "@/app/fonts";
-import { Birdhouse, Book, House } from "lucide-react";
+import { House } from "lucide-react";
 
 export default function Sidebar() {
   const { documents } = useDocumentsList();
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 shrink-0 h-screen border-r border-neutral-200 flex flex-col bg-white">
+    <aside className="w-64 shrink-0 h-[calc(100vh-16px)] overflow-hidden rounded-xl my-2 ml-2 border border-neutral-200 flex flex-col bg-white">
       <div className="px-4 py-4 border-b border-neutral-100">
         <Link
           href="/"

@@ -2,25 +2,19 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import fs from "fs";
 import { prisma } from "../db/prisma.js";
-import { extractKeyFrames } from "../services/video";
-import { structureStepsFromFramesBatched } from "../services/structuring.js";
-import { embedTexts } from "../services/embeddings.js";
-import { generateStepDiffs } from "../services/diffing.js";
-import type { StepDiffEntry, StepWithScreenshot } from "../types.js";
+import { ExtractedFrame, extractKeyFrames } from "../services/video";
+import type { StepDiffEntry } from "../types.js";
 import { Prisma, Step } from "../../generated/prisma/client.js";
-import { InputJsonValue } from "@prisma/client/runtime/client";
 import { uploadFileToCloudinary } from "../services/storage.js";
-
-function toJson<T>(value: T): Prisma.InputJsonValue {
-  return value as unknown as Prisma.InputJsonValue;
-}
-
-function fromJson<T>(value: Prisma.JsonValue): T {
-  return value as unknown as T;
-}
+import { v2 as cloudinary } from "cloudinary";
 
 const router = Router();
 import path from "path";
+import { getAudioDerivedTimestamps } from "../services/audio.js";
+import { embedTexts } from "../services/embeddings.js";
+import { structureStepsFromFramesBatched } from "../services/structuring.js";
+import { InputJsonValue } from "@prisma/client/runtime/client";
+import { generateStepDiffs } from "../services/diffing.js";
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -57,7 +51,7 @@ router.get("/", async (_req: Request, res: Response) => {
   res.json(summaries);
 });
 
-// ── POST /api/documents — create doc + version 1 from uploaded video ──
+// POST /api/documents — create doc + version 1 from uploaded video
 router.post(
   "/",
   upload.single("video"),
@@ -72,7 +66,11 @@ router.post(
 
     const document = await prisma.document.create({ data: { title } });
     const version = await prisma.docVersion.create({
-      data: { documentId: document.id, versionNumber: 1, status: "processing" },
+      data: {
+        documentId: document.id,
+        versionNumber: 1,
+        status: "processing",
+      },
     });
 
     res.status(202).json({
@@ -344,91 +342,94 @@ function hydrateStepDiffs(
   }));
 }
 
-// ── shared processing pipeline ──
-
 async function processVideoIntoDoc(
   localVideoPath: string,
   documentId: string,
   versionId: string,
   videoMimeType: string,
 ): Promise<void> {
-  // 1. upload raw video to Cloudinary
-  const videoUrl = await uploadFileToCloudinary(
-    localVideoPath,
-    "videos",
-    { documentId, versionId },
-    videoMimeType,
-  );
-  await prisma.docVersion.update({
-    where: { id: versionId },
-    data: { sourceVideoUrl: videoUrl },
-  });
+  let frames: ExtractedFrame[] = [];
 
-  // 2. derive candidate timestamps from narration audio (best-effort — degrades gracefully)
-  const { timestamps: audioTimestamps, transcript } =
-    await getAudioDerivedTimestamps(localVideoPath).catch((err) => {
-      console.error("Audio transcription failed, continuing visual-only:", err);
-      return { timestamps: [], transcript: [] };
+  try {
+    // STEP 1: upload vidoe to cloudinary
+    const videoUrl = await uploadFileToCloudinary(
+      localVideoPath,
+      "video",
+      { documentId, versionId },
+      videoMimeType,
+    );
+    await prisma.docVersion.update({
+      where: { id: versionId },
+      data: { sourceVideoUrl: videoUrl },
     });
 
-  // 3. extract settled keyframes — called ONCE, result reused throughout
-  const frames = await extractKeyFrames(localVideoPath, audioTimestamps);
+    // STEP 2: audio processing (with graceful fallback)
+    const { timestamps: audioTimestamps, transcript } =
+      await getAudioDerivedTimestamps(localVideoPath).catch((err) => {
+        console.error(
+          "Audio transcription failed, continuing visual-only:",
+          err,
+        );
+        return { timestamps: [], transcript: [] };
+      });
 
-  // 4. structure frames (+ transcript context) into steps via Claude
-  const structuredSteps = await structureStepsFromFramesBatched(
-    frames,
-    transcript,
-  );
+    // STEP 3: frame extraction
+    frames = await extractKeyFrames(localVideoPath, audioTimestamps);
 
-  // 5. upload only the frames selected as steps
-  const stepsWithUrls: StepWithScreenshot[] = [];
-  for (let i = 0; i < structuredSteps.length; i++) {
-    const step = structuredSteps[i];
-    const frame = frames[step.frame_index]; // same `frames` array used in step 4 — indices now actually correspond
-    const screenshotUrl = await uploadFileToCloudinary(
-      frame.path,
-      "screenshots",
-      { documentId, versionId, stepIndex: i },
-      // no mimetype override needed — uploadFileToCloudinary defaults to image detection for non-video paths
+    // STEP 4: structure steps with Claude
+    const structuredSteps = await structureStepsFromFramesBatched(
+      frames,
+      transcript,
     );
-    stepsWithUrls.push({ ...step, screenshotUrl });
-  }
 
-  // 6. embed step text for later diffing
-  const embeddings = await embedTexts(
-    stepsWithUrls.map((s) => `${s.title}. ${s.body_text}`),
-  );
+    // STEP 5: upload selected screenshots concurrently with index safety
+    const stepsWithUrls = await Promise.all(
+      structuredSteps.map(async (step, i) => {
+        const safeIndex = Math.min(
+          Math.max(0, step.frame_index),
+          frames.length - 1,
+        );
+        const frame = frames[safeIndex];
 
-  // 7. persist steps atomically
-  await prisma.$transaction(
-    stepsWithUrls.map((step, i) =>
-      prisma.step.create({
-        data: {
-          docVersionId: versionId,
-          orderIndex: i,
-          title: step.title,
-          bodyText: step.body_text,
-          screenshotUrl: step.screenshotUrl,
-          embedding: embeddings[i],
-        },
+        const screenshotUrl = await uploadFileToCloudinary(
+          frame.path,
+          "screenshots",
+          { documentId, versionId, stepIndex: i },
+        );
+        return { ...step, screenshotUrl };
       }),
-    ),
-  );
+    );
 
-  await prisma.docVersion.update({
-    where: { id: versionId },
-    data: { status: "ready" },
-  });
+    // STEP 6: generate embeddings
+    const embeddings = await embedTexts(
+      stepsWithUrls.map((s) => `${s.title}. ${s.body_text}`),
+    );
 
-  // 8. cleanup local temp files
-  fs.unlinkSync(localVideoPath);
-  frames.forEach((f) => {
-    try {
-      fs.unlinkSync(f.path);
-    } catch {
-      /* already removed */
-    }
-  });
+    // STEP 7: atomic DB persistence
+    await prisma.$transaction(
+      stepsWithUrls.map((step, i) =>
+        prisma.step.create({
+          data: {
+            docVersionId: versionId,
+            orderIndex: i,
+            title: step.title,
+            bodyText: step.body_text,
+            screenshotUrl: step.screenshotUrl,
+            embedding: embeddings[i],
+          },
+        }),
+      ),
+    );
+
+    await prisma.docVersion.update({
+      where: { id: versionId },
+      data: { status: "ready" },
+    });
+  } finally {
+    // guaranteed cleanup even if job fails mid-way
+    fs.promises.unlink(localVideoPath).catch(() => {});
+    frames.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
+  }
 }
 
 async function markVersionFailed(
@@ -441,9 +442,6 @@ async function markVersionFailed(
     data: { status: "failed", errorMessage: message },
   });
 }
-
-import { v2 as cloudinary } from "cloudinary";
-import { getAudioDerivedTimestamps } from "../services/audioProcessor.js";
 
 // ── DELETE /api/documents/:id/versions/:versionId ──
 router.delete(

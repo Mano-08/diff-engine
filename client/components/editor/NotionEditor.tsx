@@ -42,7 +42,7 @@ export default function NotionEditor({
   return (
     <div>
       <Toolbar editor={editor} documentTitle={documentTitle} />
-      <div className="max-w-2xl mx-auto px-8 py-16">
+      <div className="max-w-2xl mx-auto p-8">
         <EditorContent
           editor={editor}
           className="[&_h1]:text-3xl [&_h1]:font-bold [&_h1]:mb-4 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-neutral-700 [&_p]:mb-3"

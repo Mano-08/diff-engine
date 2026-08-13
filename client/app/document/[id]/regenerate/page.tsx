@@ -19,14 +19,14 @@ export default function RegenerateDocumentPage() {
     <main className="h-full flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-xl">
         <h1 className="text-xl font-semibold text-neutral-900 mb-1">
-          Regenerate document
+          Generate new version
         </h1>
         <p className="text-sm text-neutral-500 mb-8">
           Upload an updated recording. We&apos;ll generate a new version and
           show you what changed.
         </p>
         <VideoUploadForm
-          submitLabel="Regenerate document"
+          submitLabel="Generate new version"
           onSubmit={handleSubmit}
         />
       </div>

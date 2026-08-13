@@ -40,7 +40,7 @@ export default function DocumentPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-white">
+      <nav className="flex items-center justify-between px-6 py-[14.5px] border-b border-neutral-200 mt-2">
         <h1 className="text-sm font-semibold text-neutral-900">
           {document.title}
         </h1>
@@ -48,7 +48,7 @@ export default function DocumentPage() {
           href={`/document/${id}/regenerate`}
           className="px-3 py-1.5 rounded-lg bg-[#DA5CC7] text-white text-xs font-medium hover:bg-[#DA5CC7]/90"
         >
-          Regenerate document
+          Generate new version
         </Link>
       </nav>
       <VersionTabs
@@ -63,7 +63,7 @@ export default function DocumentPage() {
       />
 
       {canShowDiff && (
-        <div className="flex gap-1 px-6 pt-3">
+        <div className="flex gap-1 px-6 py-3 bg-white shadow border-b border-neutral-200">
           <ToggleButton
             active={viewMode === "document"}
             onClick={() => setViewMode("document")}

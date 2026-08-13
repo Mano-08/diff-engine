@@ -11,7 +11,7 @@ const SAMPLE_INTERVAL_SEC = 0.5;
 const SETTLE_CHECK_DELAY_MS = 400;
 const SETTLE_DIFF_THRESHOLD = 0.02;
 const MAX_SETTLE_ATTEMPTS = 3;
-const MERGE_WINDOW_SEC = 1.5;
+const MERGE_WINDOW_SEC = 0.75;
 const SPIKE_STD_DEV_MULTIPLIER = 2;
 const SPIKE_MIN_DIFF_FLOOR = 0.05;
 
@@ -28,7 +28,6 @@ interface DiffTimelinePoint {
 // ── main entry point — replaces the old scene-threshold extractKeyFrames ──
 // in extractKeyFrames, after computing durationSec (you already fetch this
 // in computeFrameDiffTimeline — hoist it up so extractKeyFrames has it too)
-
 export async function extractKeyFrames(
   videoPath: string,
   audioTimestamps: number[] = [],
@@ -60,7 +59,7 @@ export async function extractKeyFrames(
 
   if (candidateTimestamps.length === 0) {
     const fallback = await extractFallbackFrames(videoPath, outputDir);
-    return capFrameCount(fallback);
+    return fallback;
   }
 
   const settledFrames: ExtractedFrame[] = [];
@@ -81,8 +80,15 @@ export async function extractKeyFrames(
       settledFrames.push({ path: framePath, timestampSec: timestamp });
   }
 
-  return capFrameCount(settledFrames);
+  // If settling failed for all candidate points, fallback to time-based extraction
+  if (settledFrames.length === 0) {
+    const fallback = await extractFallbackFrames(videoPath, outputDir);
+    return fallback;
+  }
+
+  return settledFrames;
 }
+
 async function waitForStableFrame(
   videoPath: string,
   baseTimestamp: number,
@@ -95,39 +101,46 @@ async function waitForStableFrame(
     const t2 = Math.min(t1 + SETTLE_CHECK_DELAY_MS / 1000, durationSec - 0.02);
 
     if (t1 >= durationSec || t2 >= durationSec || t1 >= t2) continue; // no valid window left, try next attempt or give up
+    let frame1: string | null = null;
+    let frame2: string | null = null;
+    let keepFrame1 = false;
 
     try {
-      const frame1 = await extractFrameAt(videoPath, t1, outputDir);
-      const frame2 = await extractFrameAt(videoPath, t2, outputDir);
+      frame1 = await extractFrameAt(videoPath, t1, outputDir);
+      frame2 = await extractFrameAt(videoPath, t2, outputDir);
 
       const diff = await computeFrameDifference(frame1, frame2);
 
       if (diff < SETTLE_DIFF_THRESHOLD) {
-        fs.unlinkSync(frame2);
+        keepFrame1 = true;
+        await fs.promises.unlink(frame2).catch(() => {});
         return frame1;
       }
-
-      fs.unlinkSync(frame1);
-      fs.unlinkSync(frame2);
     } catch (err) {
       console.error(
         `Frame extraction failed at attempt ${attempt} (t1=${t1}, t2=${t2}):`,
         err,
       );
-      // fall through to next attempt rather than crashing the whole pipeline
+    } finally {
+      if (frame1 && !keepFrame1 && fs.existsSync(frame1)) {
+        await fs.promises.unlink(frame1).catch(() => {});
+      }
+
+      if (frame2 && fs.existsSync(frame2)) {
+        await fs.promises.unlink(frame2).catch(() => {});
+      }
     }
   }
 
   return null;
 }
-// ── layer 1: sample the video at fixed intervals, compute pixel diff at each step ──
 
+// ── layer 1: sample the video at fixed intervals, compute pixel diff at each step ──
 async function computeFrameDiffTimeline(
   videoPath: string,
   outputDir: string,
   durationSec: number,
 ): Promise<DiffTimelinePoint[]> {
-  // const durationSec = await getVideoDuration(videoPath);
   const timeline: DiffTimelinePoint[] = [];
   let previousFramePath: string | null = null;
 
@@ -135,32 +148,42 @@ async function computeFrameDiffTimeline(
     const framePath = await extractFrameAt(videoPath, t, outputDir);
 
     if (previousFramePath) {
-      const diff = await computeFrameDifference(previousFramePath, framePath);
-      timeline.push({ t, diff });
-      fs.unlinkSync(previousFramePath);
+      try {
+        const diff = await computeFrameDifference(previousFramePath, framePath);
+        timeline.push({ t, diff });
+      } finally {
+        await fs.promises.unlink(previousFramePath).catch(() => {});
+      }
     }
 
     previousFramePath = framePath;
   }
 
-  if (previousFramePath) fs.unlinkSync(previousFramePath);
+  if (previousFramePath) {
+    await fs.promises.unlink(previousFramePath).catch(() => {});
+  }
 
   return timeline;
 }
 
-// ── layer 2: flag local spikes in the diff timeline, not a fixed global threshold ──
-
+// layer 2: flag local spikes in the diff timeline, not a fixed global threshold
 function detectAdaptiveVisualTimestamps(
   diffScores: DiffTimelinePoint[],
 ): number[] {
-  const WINDOW = 10;
+  if (diffScores.length === 0) return [];
+
+  // Dynamically shrink window for short videos
+  const windowSize = Math.min(
+    10,
+    Math.max(1, Math.floor(diffScores.length / 2)),
+  );
   const candidates: number[] = [];
 
-  for (let i = WINDOW; i < diffScores.length; i++) {
-    const window = diffScores.slice(i - WINDOW, i);
-    const avg = window.reduce((sum, d) => sum + d.diff, 0) / WINDOW;
+  for (let i = windowSize; i < diffScores.length; i++) {
+    const window = diffScores.slice(i - windowSize, i);
+    const avg = window.reduce((sum, d) => sum + d.diff, 0) / windowSize;
     const stdDev = Math.sqrt(
-      window.reduce((sum, d) => sum + (d.diff - avg) ** 2, 0) / WINDOW,
+      window.reduce((sum, d) => sum + (d.diff - avg) ** 2, 0) / windowSize,
     );
 
     const isSpike =
@@ -173,8 +196,7 @@ function detectAdaptiveVisualTimestamps(
   return candidates;
 }
 
-// ── merge audio-derived and visual-derived candidate timestamps ──
-
+// merge audio-derived and visual-derived candidate timestamps
 function mergeAndDedupeTimestamps(
   audioTimestamps: number[],
   visualTimestamps: number[],
@@ -194,8 +216,7 @@ function mergeAndDedupeTimestamps(
   return merged;
 }
 
-// ── shared low-level helpers ──
-
+// shared low-level helpers
 function extractFrameAt(
   videoPath: string,
   timestampSec: number,
@@ -251,7 +272,6 @@ function getVideoDuration(videoPath: string): Promise<number> {
 }
 
 // ── fallback path — only hit if literally nothing was detected ──
-
 function extractFallbackFrames(
   videoPath: string,
   outputDir: string,
@@ -275,15 +295,4 @@ function extractFallbackFrames(
       .on("error", reject)
       .run();
   });
-}
-
-function capFrameCount(frames: ExtractedFrame[]): ExtractedFrame[] {
-  if (frames.length <= MAX_FRAMES) return frames;
-
-  const step = frames.length / MAX_FRAMES;
-  const sampled: ExtractedFrame[] = [];
-  for (let i = 0; i < MAX_FRAMES; i++) {
-    sampled.push(frames[Math.floor(i * step)]);
-  }
-  return sampled;
 }

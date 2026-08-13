@@ -18,39 +18,13 @@ export default function Toolbar({
   }
 
   return (
-    <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-neutral-200">
-      <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`p-1.5 rounded transition-colors ${
-              editor.isActive("bold")
-                ? "bg-neutral-900 text-white"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
-            }`}
-          >
-            <Bold size={15} />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`p-1.5 rounded transition-colors ${
-              editor.isActive("italic")
-                ? "bg-neutral-900 text-white"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
-            }`}
-          >
-            <Italic size={15} />
-          </button>
-        </div>
-
-        <button
-          onClick={handleDownload}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 transition-colors"
-        >
-          <Download size={14} />
-          Export .md
-        </button>
-      </div>
+    <div className="fixed bottom-21 right-6 z-50 flex flex-col items-end gap-3">
+      <button
+        onClick={handleDownload}
+        className="w-12 h-12 rounded-full bg-neutral-900 hover:bg-neutral-800 text-white flex items-center justify-center shadow-lg transition-colors shrink-0"
+      >
+        <Download size={18} />
+      </button>
     </div>
   );
 }
