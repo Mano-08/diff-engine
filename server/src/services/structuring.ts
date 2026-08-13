@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
-import fs from "fs";
+import sharp from "sharp";
 import type { StructuredStep } from "../types.js";
 import type { ExtractedFrame } from "./video";
-import type { TranscriptSegment } from "./audioProcessor.js";
+import type { TranscriptSegment } from "./audio.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -10,7 +10,104 @@ const BATCH_SIZE = 25;
 const OVERLAP = 2;
 const NEARBY_TRANSCRIPT_WINDOW_SEC = 3;
 
-// ── public entry point — call this one from documents.ts ──
+interface FrameBatch {
+  frames: ExtractedFrame[];
+  startIndex: number;
+  overlapCount: number;
+}
+
+function createOverlappingBatches(
+  frames: ExtractedFrame[],
+  batchSize: number,
+  overlap: number,
+): FrameBatch[] {
+  if (frames.length === 0) return [];
+
+  if (batchSize <= 0) {
+    throw new Error("batchSize must be greater than 0");
+  }
+
+  if (overlap < 0 || overlap >= batchSize) {
+    throw new Error("overlap must be >= 0 and less than batchSize");
+  }
+
+  const batches: FrameBatch[] = [];
+  const step = batchSize - overlap;
+
+  for (let start = 0; start < frames.length; start += step) {
+    const end = Math.min(start + batchSize, frames.length);
+
+    batches.push({
+      frames: frames.slice(start, end),
+      startIndex: start,
+      overlapCount: start === 0 ? 0 : Math.min(overlap, start),
+    });
+
+    if (end === frames.length) break;
+  }
+
+  return batches;
+}
+
+/**
+ * Drops any incoming step whose (already-remapped, absolute) frame_index
+ * was also produced by a previous batch — overlap frames get shown to
+ * Claude twice on purpose (for continuity context), so the same UI moment
+ * can otherwise get documented twice at the seam.
+ */
+function mergeAvoidingDuplicateAtSeam(
+  existing: StructuredStep[],
+  incoming: StructuredStep[],
+): StructuredStep[] {
+  if (existing.length === 0) return incoming;
+
+  const usedFrameIndices = new Set(existing.map((s) => s.frame_index));
+  const deduped = incoming.filter((s) => !usedFrameIndices.has(s.frame_index));
+  return [...existing, ...deduped];
+}
+
+// ── transcript lookup ──
+function findNearbyTranscriptSegment(
+  transcript: TranscriptSegment[],
+  timestampSec: number,
+  windowSec = NEARBY_TRANSCRIPT_WINDOW_SEC,
+): TranscriptSegment | undefined {
+  return transcript.find(
+    (s) =>
+      s.endSec >= timestampSec - windowSec &&
+      s.startSec <= timestampSec + windowSec,
+  );
+}
+
+// ── system prompt ──
+function buildSystemPrompt(
+  previousStepContext: string | null,
+  overlapCount: number,
+): string {
+  const base =
+    "You are documenting a software workflow from a sequence of screenshots, in order. " +
+    "For each screenshot that shows a distinct, documentable UI action (clicking a button, " +
+    "opening a menu, typing into a field, navigating to a new screen), output a step. " +
+    "Skip frames that don't represent a new action (e.g. a screen that hasn't changed, or " +
+    "mid-transition/loading states). Only document what's visibly shown or explicitly " +
+    "narrated - never invent buttons, menus, or actions that aren't in the evidence.\n\n" +
+    "Respond ONLY with a JSON array, no prose, no markdown fences, matching this shape:\n" +
+    '[{ "frame_index": number, "title": string, "body_text": string }]\n' +
+    'frame_index must match the "Frame index N" label given before each image.';
+
+  const overlapNote =
+    overlapCount > 0
+      ? `\n\nThe first ${overlapCount} frame(s) in this batch were also shown in the previous ` +
+        "batch, purely for continuity - do not re-document them unless something about them " +
+        "was missed."
+      : "";
+
+  const contextNote = previousStepContext
+    ? `\n\nThe last documented step so far was: "${previousStepContext}". Continue from there.`
+    : "";
+
+  return base + overlapNote + contextNote;
+}
 
 export async function structureStepsFromFramesBatched(
   frames: ExtractedFrame[],
@@ -43,14 +140,22 @@ export async function structureStepsFromFramesBatched(
   return allSteps;
 }
 
-// ── single-batch Claude call ──
+// single-batch Claude call
 
 type ImageContentBlock =
   | { type: "text"; text: string }
   | {
       type: "image";
-      source: { type: "base64"; media_type: "image/png"; data: string };
+      source: { type: "base64"; media_type: "image/jpeg"; data: string };
     };
+
+async function toCompressedBase64(framePath: string): Promise<string> {
+  const buf = await sharp(framePath)
+    .resize({ width: 1200, withoutEnlargement: true })
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  return buf.toString("base64");
+}
 
 async function structureStepsFromFrames(
   frames: ExtractedFrame[],
@@ -58,32 +163,32 @@ async function structureStepsFromFrames(
   previousStepContext: string | null,
   overlapCount: number,
 ): Promise<StructuredStep[]> {
-  const imageBlocks: ImageContentBlock[] = frames.flatMap((frame, index) => {
+  const imageBlocks: ImageContentBlock[] = [];
+
+  for (let index = 0; index < frames.length; index++) {
+    const frame = frames[index];
     const nearbySegment = findNearbyTranscriptSegment(
       transcript,
       frame.timestampSec,
     );
-    const blocks: ImageContentBlock[] = [];
 
     if (nearbySegment) {
-      blocks.push({
+      imageBlocks.push({
         type: "text",
         text: `Narration near this frame: "${nearbySegment.text}"`,
       });
     }
 
-    blocks.push({ type: "text", text: `Frame index ${index}:` });
-    blocks.push({
+    imageBlocks.push({ type: "text", text: `Frame index ${index}:` });
+    imageBlocks.push({
       type: "image",
       source: {
         type: "base64",
-        media_type: "image/png",
-        data: fs.readFileSync(frame.path).toString("base64"),
+        media_type: "image/jpeg",
+        data: await toCompressedBase64(frame.path),
       },
     });
-
-    return blocks;
-  });
+  }
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -104,108 +209,4 @@ async function structureStepsFromFrames(
   } catch {
     throw new Error(`Failed to parse Claude response as JSON: ${cleaned}`);
   }
-}
-
-// ── system prompt ──
-
-function buildSystemPrompt(
-  previousStepContext: string | null,
-  overlapCount: number,
-): string {
-  let prompt = `You are given a sequence of screenshots taken from a screen recording, in chronological order, each labeled with its frame index. Some frames include nearby narration text, transcribed from the recording's audio — use it as strong evidence of user intent when present. Group frames into logical steps a user would take to complete the task shown. Merge frames that belong to the same action; skip frames that show nothing meaningful (transitions, blank loading screens, spinners, skeleton screens).
-
-Return ONLY strict JSON, no prose, no markdown fences, in this shape:
-[
-  { "title": "short step title", "body_text": "1-2 sentence instruction", "frame_index": 0 }
-]`;
-
-  if (previousStepContext) {
-    prompt += `\n\nContext: this is a continuation of a longer recording. The last step identified in the previous batch was: "${previousStepContext}".`;
-  }
-
-  if (overlapCount > 0) {
-    prompt += `\n\nThe first ${overlapCount} frame(s) in this batch are repeated from the end of the previous batch, included only for continuity. Do NOT create a new step for them unless they reveal a genuinely new action beyond what was already captured. Only start describing new steps from frame index ${overlapCount} onward, unless the overlap frames show something new.`;
-  }
-
-  return prompt;
-}
-
-// ── batching with overlap, to preserve continuity across chunk boundaries ──
-
-interface FrameBatch {
-  frames: ExtractedFrame[];
-  startIndex: number;
-  overlapCount: number;
-}
-
-function createOverlappingBatches(
-  frames: ExtractedFrame[],
-  size: number,
-  overlap: number,
-): FrameBatch[] {
-  const batches: FrameBatch[] = [];
-  let start = 0;
-
-  while (start < frames.length) {
-    const end = Math.min(start + size, frames.length);
-    batches.push({
-      frames: frames.slice(start, end),
-      startIndex: start,
-      overlapCount: start === 0 ? 0 : overlap,
-    });
-    if (end === frames.length) break;
-    start = end - overlap;
-  }
-
-  return batches;
-}
-
-function mergeAvoidingDuplicateAtSeam(
-  existing: StructuredStep[],
-  incoming: StructuredStep[],
-): StructuredStep[] {
-  if (existing.length === 0) return incoming;
-
-  const lastExisting = existing[existing.length - 1];
-  const firstIncoming = incoming[0];
-
-  const isDuplicate =
-    titleSimilarity(lastExisting.title, firstIncoming.title) > 0.8;
-  return isDuplicate
-    ? [...existing, ...incoming.slice(1)]
-    : [...existing, ...incoming];
-}
-
-function titleSimilarity(a: string, b: string): number {
-  // cheap placeholder — swap for embedding cosine similarity (you already
-  // have this machinery in embeddings.ts for the diff feature) if this
-  // proves too coarse in practice
-  const normalize = (s: string) => s.toLowerCase().trim();
-  return normalize(a) === normalize(b) ? 1 : 0;
-}
-
-// ── transcript proximity matching ──
-
-function findNearbyTranscriptSegment(
-  segments: TranscriptSegment[],
-  frameTimestampSec: number,
-): TranscriptSegment | null {
-  let closest: TranscriptSegment | null = null;
-  let closestDistance = Infinity;
-
-  for (const segment of segments) {
-    const distance =
-      frameTimestampSec < segment.startSec
-        ? segment.startSec - frameTimestampSec
-        : frameTimestampSec > segment.endSec
-          ? frameTimestampSec - segment.endSec
-          : 0;
-
-    if (distance < closestDistance) {
-      closestDistance = distance;
-      closest = segment;
-    }
-  }
-
-  return closestDistance <= NEARBY_TRANSCRIPT_WINDOW_SEC ? closest : null;
 }

@@ -11,7 +11,7 @@ const SAMPLE_INTERVAL_SEC = 0.5;
 const SETTLE_CHECK_DELAY_MS = 400;
 const SETTLE_DIFF_THRESHOLD = 0.02;
 const MAX_SETTLE_ATTEMPTS = 3;
-const MERGE_WINDOW_SEC = 1.5;
+const MERGE_WINDOW_SEC = 0.75;
 const SPIKE_STD_DEV_MULTIPLIER = 2;
 const SPIKE_MIN_DIFF_FLOOR = 0.05;
 
@@ -28,7 +28,6 @@ interface DiffTimelinePoint {
 // ── main entry point — replaces the old scene-threshold extractKeyFrames ──
 // in extractKeyFrames, after computing durationSec (you already fetch this
 // in computeFrameDiffTimeline — hoist it up so extractKeyFrames has it too)
-
 export async function extractKeyFrames(
   videoPath: string,
   audioTimestamps: number[] = [],
@@ -60,7 +59,7 @@ export async function extractKeyFrames(
 
   if (candidateTimestamps.length === 0) {
     const fallback = await extractFallbackFrames(videoPath, outputDir);
-    return capFrameCount(fallback);
+    return fallback;
   }
 
   const settledFrames: ExtractedFrame[] = [];
@@ -84,11 +83,12 @@ export async function extractKeyFrames(
   // If settling failed for all candidate points, fallback to time-based extraction
   if (settledFrames.length === 0) {
     const fallback = await extractFallbackFrames(videoPath, outputDir);
-    return capFrameCount(fallback);
+    return fallback;
   }
 
-  return capFrameCount(settledFrames);
+  return settledFrames;
 }
+
 async function waitForStableFrame(
   videoPath: string,
   baseTimestamp: number,
@@ -103,6 +103,7 @@ async function waitForStableFrame(
     if (t1 >= durationSec || t2 >= durationSec || t1 >= t2) continue; // no valid window left, try next attempt or give up
     let frame1: string | null = null;
     let frame2: string | null = null;
+    let keepFrame1 = false;
 
     try {
       frame1 = await extractFrameAt(videoPath, t1, outputDir);
@@ -111,6 +112,7 @@ async function waitForStableFrame(
       const diff = await computeFrameDifference(frame1, frame2);
 
       if (diff < SETTLE_DIFF_THRESHOLD) {
+        keepFrame1 = true;
         await fs.promises.unlink(frame2).catch(() => {});
         return frame1;
       }
@@ -120,10 +122,10 @@ async function waitForStableFrame(
         err,
       );
     } finally {
-      // Clean up frame1 if it was not kept as a stable keyframe
-      if (frame1 && fs.existsSync(frame1)) {
+      if (frame1 && !keepFrame1 && fs.existsSync(frame1)) {
         await fs.promises.unlink(frame1).catch(() => {});
       }
+
       if (frame2 && fs.existsSync(frame2)) {
         await fs.promises.unlink(frame2).catch(() => {});
       }
@@ -132,8 +134,8 @@ async function waitForStableFrame(
 
   return null;
 }
-// ── layer 1: sample the video at fixed intervals, compute pixel diff at each step ──
 
+// ── layer 1: sample the video at fixed intervals, compute pixel diff at each step ──
 async function computeFrameDiffTimeline(
   videoPath: string,
   outputDir: string,
@@ -164,31 +166,7 @@ async function computeFrameDiffTimeline(
   return timeline;
 }
 
-// ── layer 2: flag local spikes in the diff timeline, not a fixed global threshold ──
-
-// function detectAdaptiveVisualTimestamps(
-//   diffScores: DiffTimelinePoint[],
-// ): number[] {
-//   const WINDOW = 10;
-//   const candidates: number[] = [];
-
-//   for (let i = WINDOW; i < diffScores.length; i++) {
-//     const window = diffScores.slice(i - WINDOW, i);
-//     const avg = window.reduce((sum, d) => sum + d.diff, 0) / WINDOW;
-//     const stdDev = Math.sqrt(
-//       window.reduce((sum, d) => sum + (d.diff - avg) ** 2, 0) / WINDOW,
-//     );
-
-//     const isSpike =
-//       diffScores[i].diff > avg + SPIKE_STD_DEV_MULTIPLIER * stdDev &&
-//       diffScores[i].diff > SPIKE_MIN_DIFF_FLOOR;
-
-//     if (isSpike) candidates.push(diffScores[i].t);
-//   }
-
-//   return candidates;
-// }
-
+// layer 2: flag local spikes in the diff timeline, not a fixed global threshold
 function detectAdaptiveVisualTimestamps(
   diffScores: DiffTimelinePoint[],
 ): number[] {
@@ -218,8 +196,7 @@ function detectAdaptiveVisualTimestamps(
   return candidates;
 }
 
-// ── merge audio-derived and visual-derived candidate timestamps ──
-
+// merge audio-derived and visual-derived candidate timestamps
 function mergeAndDedupeTimestamps(
   audioTimestamps: number[],
   visualTimestamps: number[],
@@ -239,8 +216,7 @@ function mergeAndDedupeTimestamps(
   return merged;
 }
 
-// ── shared low-level helpers ──
-
+// shared low-level helpers
 function extractFrameAt(
   videoPath: string,
   timestampSec: number,
@@ -296,7 +272,6 @@ function getVideoDuration(videoPath: string): Promise<number> {
 }
 
 // ── fallback path — only hit if literally nothing was detected ──
-
 function extractFallbackFrames(
   videoPath: string,
   outputDir: string,
@@ -320,15 +295,4 @@ function extractFallbackFrames(
       .on("error", reject)
       .run();
   });
-}
-
-function capFrameCount(frames: ExtractedFrame[]): ExtractedFrame[] {
-  if (frames.length <= MAX_FRAMES) return frames;
-
-  const step = frames.length / MAX_FRAMES;
-  const sampled: ExtractedFrame[] = [];
-  for (let i = 0; i < MAX_FRAMES; i++) {
-    sampled.push(frames[Math.floor(i * step)]);
-  }
-  return sampled;
 }

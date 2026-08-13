@@ -3,26 +3,17 @@ import multer from "multer";
 import fs from "fs";
 import { prisma } from "../db/prisma.js";
 import { ExtractedFrame, extractKeyFrames } from "../services/video";
-import { structureStepsFromFramesBatched } from "../services/structuring.js";
-import { embedTexts } from "../services/embeddings.js";
-import { generateStepDiffs } from "../services/diffing.js";
-import type { StepDiffEntry, StepWithScreenshot } from "../types.js";
+import type { StepDiffEntry } from "../types.js";
 import { Prisma, Step } from "../../generated/prisma/client.js";
-import { InputJsonValue } from "@prisma/client/runtime/client";
 import { uploadFileToCloudinary } from "../services/storage.js";
 import { v2 as cloudinary } from "cloudinary";
-import { getAudioDerivedTimestamps } from "../services/audioProcessor.js";
-
-function toJson<T>(value: T): Prisma.InputJsonValue {
-  return value as unknown as Prisma.InputJsonValue;
-}
-
-function fromJson<T>(value: Prisma.JsonValue): T {
-  return value as unknown as T;
-}
 
 const router = Router();
 import path from "path";
+import { getAudioDerivedTimestamps } from "../services/audio.js";
+import { embedTexts } from "../services/embedding.js";
+import { structureStepsFromFramesBatched } from "../services/structuring.js";
+import { processVideoIntoDoc } from "../pipeline/orchestrator.js";
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -59,7 +50,7 @@ router.get("/", async (_req: Request, res: Response) => {
   res.json(summaries);
 });
 
-// ── POST /api/documents — create doc + version 1 from uploaded video ──
+// POST /api/documents — create doc + version 1 from uploaded video
 router.post(
   "/",
   upload.single("video"),
@@ -74,7 +65,11 @@ router.post(
 
     const document = await prisma.document.create({ data: { title } });
     const version = await prisma.docVersion.create({
-      data: { documentId: document.id, versionNumber: 1, status: "processing" },
+      data: {
+        documentId: document.id,
+        versionNumber: 1,
+        status: "processing",
+      },
     });
 
     res.status(202).json({
@@ -225,110 +220,110 @@ router.post(
 );
 
 // ── GET /api/documents/:id/versions/:versionId/diff — diff vs previous version ──
-router.get(
-  "/:id/versions/:versionId/diff",
-  async (req: Request, res: Response) => {
-    const { id: documentId, versionId } = req.params;
+// router.get(
+//   "/:id/versions/:versionId/diff",
+//   async (req: Request, res: Response) => {
+//     const { id: documentId, versionId } = req.params;
 
-    if (typeof versionId !== "string") {
-      res.status(400).json({ error: "invalid id" });
-      return;
-    }
+//     if (typeof versionId !== "string") {
+//       res.status(400).json({ error: "invalid id" });
+//       return;
+//     }
 
-    if (typeof documentId !== "string") {
-      res.status(400).json({ error: "invalid id" });
-      return;
-    }
+//     if (typeof documentId !== "string") {
+//       res.status(400).json({ error: "invalid id" });
+//       return;
+//     }
 
-    const newVersion = await prisma.docVersion.findFirst({
-      where: { id: versionId, documentId },
-      include: { steps: { orderBy: { orderIndex: "asc" } } },
-    });
+//     const newVersion = await prisma.docVersion.findFirst({
+//       where: { id: versionId, documentId },
+//       include: { steps: { orderBy: { orderIndex: "asc" } } },
+//     });
 
-    if (!newVersion) {
-      res.status(404).json({ error: "version not found" });
-      return;
-    }
+//     if (!newVersion) {
+//       res.status(404).json({ error: "version not found" });
+//       return;
+//     }
 
-    if (newVersion.versionNumber <= 1) {
-      res
-        .status(400)
-        .json({ error: "version 1 has no previous version to diff against" });
-      return;
-    }
+//     if (newVersion.versionNumber <= 1) {
+//       res
+//         .status(400)
+//         .json({ error: "version 1 has no previous version to diff against" });
+//       return;
+//     }
 
-    const oldVersion = await prisma.docVersion.findFirst({
-      where: { documentId, versionNumber: newVersion.versionNumber - 1 },
-      include: { steps: { orderBy: { orderIndex: "asc" } } },
-    });
+//     const oldVersion = await prisma.docVersion.findFirst({
+//       where: { documentId, versionNumber: newVersion.versionNumber - 1 },
+//       include: { steps: { orderBy: { orderIndex: "asc" } } },
+//     });
 
-    if (!oldVersion) {
-      res.status(404).json({ error: "previous version not found" });
-      return;
-    }
+//     if (!oldVersion) {
+//       res.status(404).json({ error: "previous version not found" });
+//       return;
+//     }
 
-    // upsert instead of findUnique-then-create — collapses concurrent
-    // requests into a single row instead of racing on the unique constraint
-    let diffRecord;
-    try {
-      const stepDiffs = await computeOrReuseStepDiffs(
-        oldVersion.id,
-        newVersion.id,
-        oldVersion.steps,
-        newVersion.steps,
-      );
-      diffRecord = await prisma.diff.upsert({
-        where: {
-          oldVersionId_newVersionId: {
-            oldVersionId: oldVersion.id,
-            newVersionId: newVersion.id,
-          },
-        },
-        update: {}, // if it already exists, don't touch it — just return it
-        create: {
-          oldVersionId: oldVersion.id,
-          newVersionId: newVersion.id,
-          stepDiffs: stepDiffs as unknown as InputJsonValue,
-        },
-      });
-    } catch (err) {
-      console.error("Diff generation/upsert failed:", err);
-      res.status(500).json({ error: "failed to generate diff" });
-      return;
-    }
+//     // upsert instead of findUnique-then-create — collapses concurrent
+//     // requests into a single row instead of racing on the unique constraint
+//     let diffRecord;
+//     try {
+//       const stepDiffs = await computeOrReuseStepDiffs(
+//         oldVersion.id,
+//         newVersion.id,
+//         oldVersion.steps,
+//         newVersion.steps,
+//       );
+//       diffRecord = await prisma.diff.upsert({
+//         where: {
+//           oldVersionId_newVersionId: {
+//             oldVersionId: oldVersion.id,
+//             newVersionId: newVersion.id,
+//           },
+//         },
+//         update: {}, // if it already exists, don't touch it — just return it
+//         create: {
+//           oldVersionId: oldVersion.id,
+//           newVersionId: newVersion.id,
+//           stepDiffs: stepDiffs as unknown as InputJsonValue,
+//         },
+//       });
+//     } catch (err) {
+//       console.error("Diff generation/upsert failed:", err);
+//       res.status(500).json({ error: "failed to generate diff" });
+//       return;
+//     }
 
-    // hydrate IDs into full Step objects for the response —
-    // this is what the frontend actually renders
-    const hydrated = hydrateStepDiffs(
-      diffRecord.stepDiffs as unknown as StepDiffEntry[],
-      oldVersion.steps,
-      newVersion.steps,
-    );
+//     // hydrate IDs into full Step objects for the response —
+//     // this is what the frontend actually renders
+//     const hydrated = hydrateStepDiffs(
+//       diffRecord.stepDiffs as unknown as StepDiffEntry[],
+//       oldVersion.steps,
+//       newVersion.steps,
+//     );
 
-    res.json({
-      id: diffRecord.id,
-      oldVersionId: diffRecord.oldVersionId,
-      newVersionId: diffRecord.newVersionId,
-      stepDiffs: hydrated,
-    });
-  },
-);
+//     res.json({
+//       id: diffRecord.id,
+//       oldVersionId: diffRecord.oldVersionId,
+//       newVersionId: diffRecord.newVersionId,
+//       stepDiffs: hydrated,
+//     });
+//   },
+// );
 
 // Only computes the diff if it doesn't already exist — avoids redundant
 // embedding/pixel-diff work when upsert's `update: {}` branch fires
-async function computeOrReuseStepDiffs(
-  oldVersionId: string,
-  newVersionId: string,
-  oldSteps: Step[],
-  newSteps: Step[],
-) {
-  const existing = await prisma.diff.findUnique({
-    where: { oldVersionId_newVersionId: { oldVersionId, newVersionId } },
-  });
-  if (existing) return existing.stepDiffs as unknown as StepDiffEntry[];
+// async function computeOrReuseStepDiffs(
+//   oldVersionId: string,
+//   newVersionId: string,
+//   oldSteps: Step[],
+//   newSteps: Step[],
+// ) {
+//   const existing = await prisma.diff.findUnique({
+//     where: { oldVersionId_newVersionId: { oldVersionId, newVersionId } },
+//   });
+//   if (existing) return existing.stepDiffs as unknown as StepDiffEntry[];
 
-  return generateStepDiffs(oldSteps, newSteps);
-}
+//   return generateStepDiffs(oldSteps, newSteps);
+// }
 
 function hydrateStepDiffs(
   stepDiffs: StepDiffEntry[],
@@ -346,98 +341,96 @@ function hydrateStepDiffs(
   }));
 }
 
-// ── shared processing pipeline ──
+// async function processVideoIntoDoc(
+//   localVideoPath: string,
+//   documentId: string,
+//   versionId: string,
+//   videoMimeType: string,
+// ): Promise<void> {
+//   let frames: ExtractedFrame[] = [];
 
-async function processVideoIntoDoc(
-  localVideoPath: string,
-  documentId: string,
-  versionId: string,
-  videoMimeType: string,
-): Promise<void> {
-  let frames: ExtractedFrame[] = [];
+//   try {
+//     // STEP 1: upload vidoe to cloudinary
+//     const videoUrl = await uploadFileToCloudinary(
+//       localVideoPath,
+//       "video",
+//       { documentId, versionId },
+//       videoMimeType,
+//     );
+//     await prisma.docVersion.update({
+//       where: { id: versionId },
+//       data: { sourceVideoUrl: videoUrl },
+//     });
 
-  try {
-    // 1. Upload raw video
-    const videoUrl = await uploadFileToCloudinary(
-      localVideoPath,
-      "videos",
-      { documentId, versionId },
-      videoMimeType,
-    );
-    await prisma.docVersion.update({
-      where: { id: versionId },
-      data: { sourceVideoUrl: videoUrl },
-    });
+//     // STEP 2: audio processing (with graceful fallback)
+//     const { timestamps: audioTimestamps, transcript } =
+//       await getAudioDerivedTimestamps(localVideoPath).catch((err) => {
+//         console.error(
+//           "Audio transcription failed, continuing visual-only:",
+//           err,
+//         );
+//         return { timestamps: [], transcript: [] };
+//       });
 
-    // 2. Audio processing (graceful fallback)
-    const { timestamps: audioTimestamps, transcript } =
-      await getAudioDerivedTimestamps(localVideoPath).catch((err) => {
-        console.error(
-          "Audio transcription failed, continuing visual-only:",
-          err,
-        );
-        return { timestamps: [], transcript: [] };
-      });
+//     // STEP 3: frame extraction
+//     frames = await extractKeyFrames(localVideoPath, audioTimestamps);
 
-    // 3. Frame extraction
-    frames = await extractKeyFrames(localVideoPath, audioTimestamps);
+//     // STEP 4: structure steps with Claude
+//     const structuredSteps = await structureStepsFromFramesBatched(
+//       frames,
+//       transcript,
+//     );
 
-    // 4. Structure steps with Claude
-    const structuredSteps = await structureStepsFromFramesBatched(
-      frames,
-      transcript,
-    );
+//     // STEP 5: Upload selected screenshots concurrently with index safety
+//     const stepsWithUrls = await Promise.all(
+//       structuredSteps.map(async (step, i) => {
+//         // Clamp index bounds to prevent runtime crashes from LLM response anomalies
+//         const safeIndex = Math.min(
+//           Math.max(0, step.frame_index),
+//           frames.length - 1,
+//         );
+//         const frame = frames[safeIndex];
 
-    // 5. Upload selected screenshots concurrently with index safety
-    const stepsWithUrls = await Promise.all(
-      structuredSteps.map(async (step, i) => {
-        // Clamp index bounds to prevent runtime crashes from LLM response anomalies
-        const safeIndex = Math.min(
-          Math.max(0, step.frame_index),
-          frames.length - 1,
-        );
-        const frame = frames[safeIndex];
+//         const screenshotUrl = await uploadFileToCloudinary(
+//           frame.path,
+//           "screenshots",
+//           { documentId, versionId, stepIndex: i },
+//         );
+//         return { ...step, screenshotUrl };
+//       }),
+//     );
 
-        const screenshotUrl = await uploadFileToCloudinary(
-          frame.path,
-          "screenshots",
-          { documentId, versionId, stepIndex: i },
-        );
-        return { ...step, screenshotUrl };
-      }),
-    );
+//     // 6. Generate embeddings
+//     const embeddings = await embedTexts(
+//       stepsWithUrls.map((s) => `${s.title}. ${s.body_text}`),
+//     );
 
-    // 6. Generate embeddings
-    const embeddings = await embedTexts(
-      stepsWithUrls.map((s) => `${s.title}. ${s.body_text}`),
-    );
+//     // 7. Atomic DB persistence
+//     await prisma.$transaction(
+//       stepsWithUrls.map((step, i) =>
+//         prisma.step.create({
+//           data: {
+//             docVersionId: versionId,
+//             orderIndex: i,
+//             title: step.title,
+//             bodyText: step.body_text,
+//             screenshotUrl: step.screenshotUrl,
+//             embedding: embeddings[i],
+//           },
+//         }),
+//       ),
+//     );
 
-    // 7. Atomic DB persistence
-    await prisma.$transaction(
-      stepsWithUrls.map((step, i) =>
-        prisma.step.create({
-          data: {
-            docVersionId: versionId,
-            orderIndex: i,
-            title: step.title,
-            bodyText: step.body_text,
-            screenshotUrl: step.screenshotUrl,
-            embedding: embeddings[i],
-          },
-        }),
-      ),
-    );
-
-    await prisma.docVersion.update({
-      where: { id: versionId },
-      data: { status: "ready" },
-    });
-  } finally {
-    // 8. Guaranteed cleanup even if job fails mid-way
-    fs.promises.unlink(localVideoPath).catch(() => {});
-    frames.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
-  }
-}
+//     await prisma.docVersion.update({
+//       where: { id: versionId },
+//       data: { status: "ready" },
+//     });
+//   } finally {
+//     // 8. Guaranteed cleanup even if job fails mid-way
+//     fs.promises.unlink(localVideoPath).catch(() => {});
+//     frames.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
+//   }
+// }
 
 async function markVersionFailed(
   versionId: string,
