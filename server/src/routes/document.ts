@@ -389,12 +389,22 @@ async function processVideoIntoDoc(
           Math.max(0, step.frame_index),
           frames.length - 1,
         );
-        const frame = frames[safeIndex];
 
+        if (step.frame_index < 0 || step.frame_index >= frames.length) {
+          console.warn(
+            `Step "${step.title}" had out-of-range frame_index ${step.frame_index} (valid: 0-${frames.length - 1}), clamped to ${safeIndex}`,
+          );
+        }
+
+        const frame = frames[safeIndex];
         const screenshotUrl = await uploadFileToCloudinary(
           frame.path,
           "screenshots",
-          { documentId, versionId, stepIndex: i },
+          {
+            documentId,
+            versionId,
+            stepIndex: i,
+          },
         );
         return { ...step, screenshotUrl };
       }),
@@ -426,9 +436,19 @@ async function processVideoIntoDoc(
       data: { status: "ready" },
     });
   } finally {
-    // guaranteed cleanup even if job fails mid-way
-    fs.promises.unlink(localVideoPath).catch(() => {});
-    frames.forEach((f) => fs.promises.unlink(f.path).catch(() => {}));
+    fs.promises.unlink(localVideoPath).catch((err) => {
+      if (err.code !== "ENOENT")
+        console.warn(
+          `Failed to clean up video ${localVideoPath}:`,
+          err.message,
+        );
+    });
+    frames.forEach((f) => {
+      fs.promises.unlink(f.path).catch((err) => {
+        if (err.code !== "ENOENT")
+          console.warn(`Failed to clean up frame ${f.path}:`, err.message);
+      });
+    });
   }
 }
 

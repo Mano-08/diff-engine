@@ -53,7 +53,7 @@ export async function generateStepDiffs(
       let newLocalPath: string | undefined;
 
       try {
-        [oldLocalPath, newLocalPath] = await Promise.all([
+        const results = await Promise.allSettled([
           downloadFromCloudinaryToTemp(
             match.oldStep!.screenshotUrl,
             TMP_DIFF_DIR,
@@ -63,14 +63,21 @@ export async function generateStepDiffs(
             TMP_DIFF_DIR,
           ),
         ]);
-        changedRegions = await diffScreenshots(oldLocalPath, newLocalPath);
+
+        if (results[0].status === "fulfilled") oldLocalPath = results[0].value;
+        if (results[1].status === "fulfilled") newLocalPath = results[1].value;
+
+        if (oldLocalPath && newLocalPath) {
+          changedRegions = await diffScreenshots(oldLocalPath, newLocalPath);
+        } else {
+          throw new Error("One or both screenshot downloads failed");
+        }
       } catch (err) {
         console.error(
           "Screenshot diff failed, falling back to no regions:",
           err,
         );
       } finally {
-        // clean up temp downloads regardless of success/failure
         [oldLocalPath, newLocalPath].forEach((p) => {
           if (p) {
             try {

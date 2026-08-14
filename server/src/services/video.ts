@@ -100,10 +100,11 @@ async function waitForStableFrame(
     const t1 = Math.min(baseTimestamp + delaySeconds, durationSec - 0.05);
     const t2 = Math.min(t1 + SETTLE_CHECK_DELAY_MS / 1000, durationSec - 0.02);
 
-    if (t1 >= durationSec || t2 >= durationSec || t1 >= t2) continue; // no valid window left, try next attempt or give up
+    if (t1 >= durationSec || t2 >= durationSec || t1 >= t2) continue;
+
     let frame1: string | null = null;
     let frame2: string | null = null;
-    let keepFrame1 = false;
+    let result: string | null = null;
 
     try {
       frame1 = await extractFrameAt(videoPath, t1, outputDir);
@@ -112,9 +113,7 @@ async function waitForStableFrame(
       const diff = await computeFrameDifference(frame1, frame2);
 
       if (diff < SETTLE_DIFF_THRESHOLD) {
-        keepFrame1 = true;
-        await fs.promises.unlink(frame2).catch(() => {});
-        return frame1;
+        result = frame1; // mark as the keeper, don't return yet — let finally run cleanup first
       }
     } catch (err) {
       console.error(
@@ -122,14 +121,15 @@ async function waitForStableFrame(
         err,
       );
     } finally {
-      if (frame1 && !keepFrame1 && fs.existsSync(frame1)) {
-        await fs.promises.unlink(frame1).catch(() => {});
-      }
+      // frame2 is NEVER the return value — always safe to delete unconditionally
+      if (frame2) await fs.promises.unlink(frame2).catch(() => {});
 
-      if (frame2 && fs.existsSync(frame2)) {
-        await fs.promises.unlink(frame2).catch(() => {});
-      }
+      // frame1 is deleted only if it's not the one being kept
+      if (frame1 && frame1 !== result)
+        await fs.promises.unlink(frame1).catch(() => {});
     }
+
+    if (result) return result; // return AFTER finally has already run cleanup
   }
 
   return null;
@@ -144,26 +144,42 @@ async function computeFrameDiffTimeline(
   const timeline: DiffTimelinePoint[] = [];
   let previousFramePath: string | null = null;
 
-  for (let t = 0; t < durationSec; t += SAMPLE_INTERVAL_SEC) {
-    const framePath = await extractFrameAt(videoPath, t, outputDir);
+  try {
+    for (let t = 0; t < durationSec; t += SAMPLE_INTERVAL_SEC) {
+      let framePath: string;
 
-    if (previousFramePath) {
       try {
-        const diff = await computeFrameDifference(previousFramePath, framePath);
-        timeline.push({ t, diff });
-      } finally {
-        await fs.promises.unlink(previousFramePath).catch(() => {});
+        framePath = await extractFrameAt(videoPath, t, outputDir);
+      } catch (err) {
+        console.warn(
+          `Skipping timeline sample at t=${t.toFixed(1)}s — extraction failed:`,
+          err,
+        );
+        continue; // skip this sample point, keep going rather than aborting the whole timeline
       }
+
+      if (previousFramePath) {
+        try {
+          const diff = await computeFrameDifference(
+            previousFramePath,
+            framePath,
+          );
+          timeline.push({ t, diff });
+        } finally {
+          await fs.promises.unlink(previousFramePath).catch(() => {});
+        }
+      }
+
+      previousFramePath = framePath;
     }
 
-    previousFramePath = framePath;
+    return timeline;
+  } finally {
+    // catches the loop's final dangling frame AND any early-throw scenario
+    if (previousFramePath) {
+      await fs.promises.unlink(previousFramePath).catch(() => {});
+    }
   }
-
-  if (previousFramePath) {
-    await fs.promises.unlink(previousFramePath).catch(() => {});
-  }
-
-  return timeline;
 }
 
 // layer 2: flag local spikes in the diff timeline, not a fixed global threshold
