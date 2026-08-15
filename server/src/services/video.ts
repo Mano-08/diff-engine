@@ -5,7 +5,6 @@ import path from "path";
 import { nanoid } from "nanoid";
 
 const TMP_DIR = path.resolve("tmp");
-const MAX_FRAMES = 25;
 
 const SAMPLE_INTERVAL_SEC = 0.5;
 const SETTLE_CHECK_DELAY_MS = 400;

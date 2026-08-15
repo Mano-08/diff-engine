@@ -1,7 +1,7 @@
 "use client";
 
 import type { Editor } from "@tiptap/react";
-import { Bold, Italic, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { jsonToMarkdown } from "@/lib/tiptap/jsonToMarkdown";
 import { downloadMarkdown } from "@/lib/downloadMarkdown";
 
