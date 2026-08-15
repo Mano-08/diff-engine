@@ -1,4 +1,4 @@
-import { Extension, Node, mergeAttributes } from "@tiptap/core";
+import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import StepNodeView from "@/components/editor/StepNodeView";
 
