@@ -48,3 +48,23 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(PORT, () =>
   console.log(`Backend running on http://localhost:${PORT}`),
 );
+
+app.get("/", (_, res) => {
+  res.sendStatus(200);
+});
+
+const PING_INTERVAL = 13 * 60 * 1000; // 13 minutes in ms
+
+async function selfPing(): Promise<void> {
+  try {
+    const pingUrl = process.env.BACKEND_URL || `http://localhost:${PORT}/`;
+    const res = await fetch(pingUrl);
+    console.log(`Self-ping successful: ${res.status}`);
+  } catch (error) {
+    console.error("Self-ping failed:", error);
+  } finally {
+    setTimeout(selfPing, PING_INTERVAL);
+  }
+}
+
+setTimeout(selfPing, PING_INTERVAL);
