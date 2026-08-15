@@ -1,5 +1,5 @@
-import { cosineSimilarity } from "./embeddings";
-import { diffScreenshots } from "./screenshotDiff";
+import { cosineSimilarity } from "./embeddings.js";
+import { diffScreenshots } from "./screenshotDiff.js";
 import type { BoundingBox, StepDiffEntry } from "../types.js";
 import { downloadFromCloudinaryToTemp } from "./storage.js";
 import { Step } from "../../generated/prisma/client.js";

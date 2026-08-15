@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import fs from "fs";
 import { prisma } from "../db/prisma.js";
-import { ExtractedFrame, extractKeyFrames } from "../services/video";
+import { ExtractedFrame, extractKeyFrames } from "../services/video.js";
 import type { StepDiffEntry } from "../types.js";
 import { Prisma, Step } from "../../generated/prisma/client.js";
 import { uploadFileToCloudinary } from "../services/storage.js";
