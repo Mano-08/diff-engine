@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import type { StructuredStep } from "../types.js";
-import type { ExtractedFrame } from "./video";
+import type { ExtractedFrame } from "./video.js";
 import type { TranscriptSegment } from "./audio.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
