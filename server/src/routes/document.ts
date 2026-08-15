@@ -48,8 +48,6 @@ router.get("/", async (_req: Request, res: Response) => {
       latestVersion: doc.versions[0],
     }));
 
-  console.info("HOI", summaries);
-
   res.json(summaries);
 });
 

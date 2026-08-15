@@ -33,15 +33,17 @@ app.listen(PORT, () =>
   console.log(`Backend running on http://localhost:${PORT}`),
 );
 
-app.get("/", (_, res) => {
+app.get("/ping", (_, res) => {
+  console.log("pong");
   res.sendStatus(200);
 });
 
-const PING_INTERVAL = 13 * 60 * 1000; // 13 minutes in ms
+const PING_INTERVAL = 2 * 60 * 1000; // 13 minutes in ms
 
 async function selfPing(): Promise<void> {
   try {
-    const pingUrl = process.env.BACKEND_URL || `http://localhost:${PORT}/`;
+    const pingUrl =
+      `${process.env.BACKEND_URL}/ping` || `http://localhost:${PORT}/ping`;
     const res = await fetch(pingUrl);
     console.log(`Self-ping successful: ${res.status}`);
   } catch (error) {
