@@ -1,7 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
   provider = "prisma-client"
@@ -24,11 +20,17 @@ model DocVersion {
   documentId     String
   document       Document @relation(fields: [documentId], references: [id])
   versionNumber  Int
-  status         String   @default("processing") // processing | ready | failed
+  status         String   @default("processing") // "processing" | "ready" | "failed"
   sourceVideoUrl String?
   errorMessage   String?
+  contentJson    Json?
   createdAt      DateTime @default(now())
   steps          Step[]
+
+  diffsAsOld Diff[] @relation("DiffOldVersion")
+  diffsAsNew Diff[] @relation("DiffNewVersion")
+
+  @@unique([documentId, versionNumber])
 }
 
 model Step {
@@ -39,4 +41,28 @@ model Step {
   title         String
   bodyText      String
   screenshotUrl String
+  embedding     Json?      // array of floats, stored as JSON for SQLite
+}
+
+model Diff {
+  id           String     @id @default(cuid())
+  oldVersionId String
+  oldVersion   DocVersion @relation("DiffOldVersion", fields: [oldVersionId], references: [id])
+  newVersionId String
+  newVersion   DocVersion @relation("DiffNewVersion", fields: [newVersionId], references: [id])
+  stepDiffs    Json
+  createdAt    DateTime   @default(now())
+
+  @@unique([oldVersionId, newVersionId])
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }
