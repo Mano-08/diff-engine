@@ -53,4 +53,4 @@ async function selfPing(): Promise<void> {
   }
 }
 
-setTimeout(selfPing, PING_INTERVAL);
+if (process.env.ENV !== "DEV") setTimeout(selfPing, PING_INTERVAL);
