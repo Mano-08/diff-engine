@@ -24,7 +24,6 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setIsSubmitting(false);
-      window.location.href = callbackUrl;
     }
   }
 
@@ -33,7 +32,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await verifyOtp(email, code);
-      router.push("/");
+      window.location.href = callbackUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid code");
     } finally {
