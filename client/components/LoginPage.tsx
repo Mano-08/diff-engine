@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { requestOtp, verifyOtp } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -12,7 +12,6 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter();
 
   async function handleRequestOtp() {
     setIsSubmitting(true);
@@ -24,7 +23,6 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setIsSubmitting(false);
-      window.location.href = callbackUrl;
     }
   }
 
@@ -33,7 +31,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await verifyOtp(email, code);
-      router.push("/");
+      window.location.href = callbackUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid code");
     } finally {
