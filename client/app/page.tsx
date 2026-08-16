@@ -1,5 +1,7 @@
+"use client";
 import Link from "next/link";
 import { bricolageGrotesque } from "./fonts";
+import { UnauthorizedDialogProvider } from "@/components/UnauthorizedDialogContext";
 
 export default function HomePage() {
   return (

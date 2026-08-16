@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useDocumentsList } from "@/hooks/useDocumentsList";
 import { bricolageGrotesque } from "@/app/fonts";
-import { House } from "lucide-react";
+import { House, LogOut } from "lucide-react";
+import { logout } from "@/lib/auth";
 
 export default function Sidebar() {
   const { documents } = useDocumentsList();
@@ -59,6 +60,13 @@ export default function Sidebar() {
           );
         })}
       </div>
+
+      <button
+        onClick={logout}
+        className=" px-4 py-1.5 m-2 rounded-lg bg-black cursor-pointer hover:bg-black/95 inline-flex items-center gap-2.5 justify-center text-neutral-300 text-sm"
+      >
+        Log out <LogOut strokeWidth={2.8} size={13} color="#d4d4d4" />
+      </button>
     </aside>
   );
 }

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { diffWords } from "diff";
 import { fetchDiff } from "@/lib/api";
 import type { DiffResult, StepDiffEntry } from "@/lib/types";
+import { useUnauthorizedDialog } from "./UnauthorizedDialogContext";
 
 export default function DiffView({
   documentId,
@@ -14,11 +15,12 @@ export default function DiffView({
   versionId: string;
 }) {
   const [diff, setDiff] = useState<DiffResult | null>(null);
+  const { showUnauthorizedDialog } = useUnauthorizedDialog();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetchDiff(documentId, versionId)
+    fetchDiff(documentId, versionId, showUnauthorizedDialog)
       .then((result) => {
         if (!cancelled) setDiff(result);
       })

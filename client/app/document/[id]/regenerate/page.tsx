@@ -3,13 +3,16 @@
 import { useParams, useRouter } from "next/navigation";
 import { regenerateDocument } from "@/lib/api";
 import VideoUploadForm from "@/components/VideoUploadForm";
+import { useUnauthorizedDialog } from "@/components/UnauthorizedDialogContext";
 
 export default function RegenerateDocumentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
+  const { showUnauthorizedDialog } = useUnauthorizedDialog();
+
   async function handleSubmit(file: File) {
-    await regenerateDocument(id, file);
+    await regenerateDocument(id, file, showUnauthorizedDialog);
     // land back on the doc hub — the new version will show up as "processing"
     // in the version tabs once the GET call picks it up
     router.push(`/document/${id}`);

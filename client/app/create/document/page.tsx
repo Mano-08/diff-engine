@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { createDocument } from "@/lib/api";
 import VideoUploadForm from "@/components/VideoUploadForm";
+import { useUnauthorizedDialog } from "@/components/UnauthorizedDialogContext";
 
 export default function CreateDocumentPage() {
   const router = useRouter();
+  const { showUnauthorizedDialog } = useUnauthorizedDialog();
 
   async function handleSubmit(file: File, title: string) {
-    const result = await createDocument(file, title);
+    const result = await createDocument(file, title, showUnauthorizedDialog);
     router.push(`/document/${result.documentId}`);
   }
 
