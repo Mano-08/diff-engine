@@ -3,16 +3,18 @@
 import { useEffect, useState, useCallback } from "react";
 import { listDocuments } from "@/lib/api";
 import type { DocumentSummary } from "@/lib/types";
+import { useUnauthorizedDialog } from "@/components/UnauthorizedDialogContext";
 
 const POLL_INTERVAL_MS = 12000;
 
 export function useDocumentsList() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { showUnauthorizedDialog } = useUnauthorizedDialog();
 
   const refresh = useCallback(async () => {
     try {
-      const docs = await listDocuments();
+      const docs = await listDocuments(showUnauthorizedDialog);
       setDocuments(docs);
     } catch {
       // sidebar failing silently is fine — main content area will surface real errors

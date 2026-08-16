@@ -1,30 +1,35 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
 
+import { useUnauthorizedDialog } from "@/components/UnauthorizedDialogContext";
 import type {
   Document,
   DocumentSummary,
   UploadResponse,
   DiffResult,
 } from "./types";
-import { showUnauthorizedToast } from "@/components/loginToast";
 
-export async function listDocuments(): Promise<DocumentSummary[]> {
+export async function listDocuments(
+  showUnauthorizedDialog: () => void,
+): Promise<DocumentSummary[]> {
   const res = await fetch(`${API_BASE}/api/v1/documents`, {
     cache: "no-store",
     credentials: "include",
   });
-  if (res.status === 401) showUnauthorizedToast();
+  if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Failed to list documents: ${res.status}`);
   return res.json();
 }
 
-export async function fetchDocument(documentId: string): Promise<Document> {
+export async function fetchDocument(
+  documentId: string,
+  showUnauthorizedDialog: () => void,
+): Promise<Document> {
   const res = await fetch(`${API_BASE}/api/v1/documents/${documentId}`, {
     cache: "no-store",
     credentials: "include",
   });
-  if (res.status === 401) showUnauthorizedToast();
+  if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Failed to fetch document: ${res.status}`);
   return res.json();
 }
@@ -32,6 +37,7 @@ export async function fetchDocument(documentId: string): Promise<Document> {
 export async function createDocument(
   file: File,
   title: string,
+  showUnauthorizedDialog: () => void,
 ): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("video", file);
@@ -42,7 +48,7 @@ export async function createDocument(
     body: formData,
     credentials: "include",
   });
-  if (res.status === 401) showUnauthorizedToast();
+  if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   return res.json();
 }
@@ -51,6 +57,7 @@ export async function createDocument(
 export async function regenerateDocument(
   documentId: string,
   file: File,
+  showUnauthorizedDialog: () => void,
 ): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("video", file);
@@ -63,7 +70,7 @@ export async function regenerateDocument(
       credentials: "include",
     },
   );
-  if (res.status === 401) showUnauthorizedToast();
+  if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Regenerate failed: ${res.status}`);
   return res.json();
 }
@@ -71,12 +78,13 @@ export async function regenerateDocument(
 export async function fetchDiff(
   documentId: string,
   versionId: string,
+  showUnauthorizedDialog: () => void,
 ): Promise<DiffResult> {
   const res = await fetch(
     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/diff`,
     { cache: "no-store", credentials: "include" },
   );
-  if (res.status === 401) showUnauthorizedToast();
+  if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Failed to fetch diff: ${res.status}`);
   return res.json();
 }
@@ -85,6 +93,7 @@ export async function fetchDiff(
 export async function deleteVersion(
   documentId: string,
   versionId: string,
+  showUnauthorizedDialog: () => void,
 ): Promise<void> {
   const res = await fetch(
     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}`,
@@ -93,7 +102,7 @@ export async function deleteVersion(
       credentials: "include",
     },
   );
-  if (res.status === 401) showUnauthorizedToast();
+  if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Delete failed: ${res.status}`);
@@ -115,7 +124,6 @@ export async function callAiRewriteApi(
     body: JSON.stringify({ text, action }),
     credentials: "include",
   });
-  if (res.status === 401) showUnauthorizedToast();
 
   if (!res.ok) {
     throw new Error(`AI rewrite failed: ${res.status}`);
@@ -163,7 +171,6 @@ export async function saveDocumentContent(
     },
   );
 
-  if (res.status === 401) showUnauthorizedToast();
   if (!res.ok) {
     throw new Error(`Failed to save: ${res.status}`);
   }

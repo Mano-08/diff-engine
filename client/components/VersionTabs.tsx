@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Trash2, X, Check } from "lucide-react";
 import { deleteVersion } from "@/lib/api";
 import type { DocVersion } from "@/lib/types";
+import { useUnauthorizedDialog } from "./UnauthorizedDialogContext";
 
 interface Props {
   documentId: string;
@@ -23,6 +24,8 @@ export default function VersionTabs({
   const [confirmingVersionId, setConfirmingVersionId] = useState<string | null>(
     null,
   );
+
+  const { showUnauthorizedDialog } = useUnauthorizedDialog();
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +37,7 @@ export default function VersionTabs({
     setIsDeleting(true);
     setError(null);
     try {
-      await deleteVersion(documentId, versionId);
+      await deleteVersion(documentId, versionId, showUnauthorizedDialog);
       setConfirmingVersionId(null);
       onVersionDeleted();
     } catch (err) {
