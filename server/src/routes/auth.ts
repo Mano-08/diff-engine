@@ -5,6 +5,7 @@ import {
   createAndStoreOtp,
   verifyOtp,
 } from "../services/otpService.js";
+import { sendOtpEmail } from "../services/email.js";
 
 const router = Router();
 
@@ -39,9 +40,9 @@ router.post("/request-otp", async (req: Request, res: Response) => {
 
   try {
     const code = await createAndStoreOtp(normalizedEmail);
-    // await sendOtpEmail(normalizedEmail, code);
+    await sendOtpEmail(normalizedEmail, code);
     recentRequestTimestamps.set(normalizedEmail, Date.now());
-    res.status(200).json({ message: "Verification code sent.", code });
+    res.status(200).json({ message: "Verification code sent." });
   } catch (err) {
     console.error("Failed to send OTP:", err);
     res.status(500).json({ error: "Failed to send verification code." });
