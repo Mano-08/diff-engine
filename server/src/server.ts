@@ -27,6 +27,8 @@ app.use("/files", express.static(STORAGE_DIR));
 app.use("/api/v1/ai", requireAuth, aiRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/documents", requireAuth, documentsRouter);
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(PORT, () =>
@@ -37,20 +39,3 @@ app.get("/ping", (_, res) => {
   console.log("pong");
   res.sendStatus(200);
 });
-
-const PING_INTERVAL = 2 * 60 * 1000; // 13 minutes in ms
-
-async function selfPing(): Promise<void> {
-  try {
-    const pingUrl =
-      `${process.env.BACKEND_URL}/ping` || `http://localhost:${PORT}/ping`;
-    const res = await fetch(pingUrl);
-    console.log(`Self-ping successful: ${res.status}`);
-  } catch (error) {
-    console.error("Self-ping failed:", error);
-  } finally {
-    setTimeout(selfPing, PING_INTERVAL);
-  }
-}
-
-if (process.env.ENV !== "DEV") setTimeout(selfPing, PING_INTERVAL);
