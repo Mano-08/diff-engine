@@ -8,14 +8,12 @@ import type {
   DiffResult,
 } from "./types";
 
-export async function listDocuments(
-  showUnauthorizedDialog: () => void,
-): Promise<DocumentSummary[]> {
+export async function listDocuments(): Promise<DocumentSummary[]> {
   const res = await fetch(`${API_BASE}/api/v1/documents`, {
     cache: "no-store",
     credentials: "include",
+    headers: { "ngrok-skip-browser-warning": "true" },
   });
-  if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Failed to list documents: ${res.status}`);
   return res.json();
 }
@@ -27,6 +25,7 @@ export async function fetchDocument(
   const res = await fetch(`${API_BASE}/api/v1/documents/${documentId}`, {
     cache: "no-store",
     credentials: "include",
+    headers: { "ngrok-skip-browser-warning": "true" },
   });
   if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Failed to fetch document: ${res.status}`);
@@ -46,6 +45,7 @@ export async function createDocument(
     method: "POST",
     body: formData,
     credentials: "include",
+    headers: { "ngrok-skip-browser-warning": "true" },
   });
   if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
@@ -67,6 +67,7 @@ export async function regenerateDocument(
       method: "POST",
       body: formData,
       credentials: "include",
+      headers: { "ngrok-skip-browser-warning": "true" },
     },
   );
   if (res.status === 401) showUnauthorizedDialog();
@@ -81,7 +82,11 @@ export async function fetchDiff(
 ): Promise<DiffResult> {
   const res = await fetch(
     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/diff`,
-    { cache: "no-store", credentials: "include" },
+    {
+      cache: "no-store",
+      credentials: "include",
+      headers: { "ngrok-skip-browser-warning": "true" },
+    },
   );
   if (res.status === 401) showUnauthorizedDialog();
   if (!res.ok) throw new Error(`Failed to fetch diff: ${res.status}`);
@@ -99,6 +104,7 @@ export async function deleteVersion(
     {
       method: "DELETE",
       credentials: "include",
+      headers: { "ngrok-skip-browser-warning": "true" },
     },
   );
   if (res.status === 401) showUnauthorizedDialog();
@@ -119,7 +125,10 @@ export async function callAiRewriteApi(
 
   const res = await fetch(`${API_BASE}/api/v1/ai/rewrite`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+    },
     body: JSON.stringify({ text, action }),
     credentials: "include",
   });
@@ -131,26 +140,6 @@ export async function callAiRewriteApi(
   const data = await res.json();
   return data.newText as string;
 }
-
-// lib/api.ts — add
-// lib/api.ts
-// export async function saveDocumentContent(
-//   documentId: string,
-//   versionId: string,
-//   contentJson: object,
-// ): Promise<void> {
-//   const API_BASE =
-//     process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
-//   const res = await fetch(
-//     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/content`,
-//     {
-//       method: "PATCH",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ content: contentJson }),
-//     },
-//   );
-//   if (!res.ok) throw new Error(`Failed to save: ${res.status}`);
-// }
 
 export async function saveDocumentContent(
   documentId: string,
@@ -164,7 +153,10 @@ export async function saveDocumentContent(
     `${API_BASE}/api/v1/documents/${documentId}/versions/${versionId}/content`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
       body: JSON.stringify({ content: contentJson }),
       credentials: "include",
     },
