@@ -24,9 +24,9 @@ fs.mkdirSync(path.join(STORAGE_DIR, "videos"), { recursive: true });
 fs.mkdirSync(path.join(STORAGE_DIR, "screenshots"), { recursive: true });
 app.use("/files", express.static(STORAGE_DIR));
 
-app.use("/api/v1/ai", requireAuth, aiRouter);
+app.use("/api/v1/ai", aiRouter);
 app.use("/api/v1/auth", authRouter);
-app.use("/api/v1/documents", requireAuth, documentsRouter);
+app.use("/api/v1/documents", documentsRouter);
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
