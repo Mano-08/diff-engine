@@ -7,6 +7,7 @@ import { useDocument } from "@/hooks/useDocument";
 import VersionTabs from "@/components/VersionTabs";
 import DocumentVersionView from "@/components/DocumentVersionView";
 import DiffView from "@/components/DiffView";
+import ErrorBox from "@/components/ErrorBox";
 
 export default function DocumentPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +27,7 @@ export default function DocumentPage() {
     }
   }, [document, activeVersionId]);
 
-  if (error) return <CenteredMessage text={error} isError />;
+  if (error) return <ErrorBox error={error} />;
   if (!document) return <CenteredMessage text="Loading..." />;
 
   const activeVersion =

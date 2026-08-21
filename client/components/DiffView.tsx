@@ -6,6 +6,7 @@ import { diffWords } from "diff";
 import { fetchDiff } from "@/lib/api";
 import type { DiffResult, StepDiffEntry } from "@/lib/types";
 import { useUnauthorizedDialog } from "./UnauthorizedDialogContext";
+import ErrorBox from "./ErrorBox";
 
 export default function DiffView({
   documentId,
@@ -33,7 +34,7 @@ export default function DiffView({
     };
   }, [documentId, versionId]);
 
-  if (error) return <p className="text-sm text-red-600 px-6 py-8">{error}</p>;
+  if (error) return <ErrorBox error={error} />;
   if (!diff)
     return (
       <p className="text-sm text-neutral-500 px-6 py-8">Loading diff...</p>
