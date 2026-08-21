@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
 import authRouter from "./routes/auth.js";
-import { requireAuth } from "./middleware/requireAuth.js";
+// import { requireAuth } from "./middleware/requireAuth.js";
 import documentsRouter from "./routes/document.js";
 import aiRouter from "./routes/ai.js";
 
@@ -24,9 +24,9 @@ fs.mkdirSync(path.join(STORAGE_DIR, "videos"), { recursive: true });
 fs.mkdirSync(path.join(STORAGE_DIR, "screenshots"), { recursive: true });
 app.use("/files", express.static(STORAGE_DIR));
 
-app.use("/api/v1/ai", requireAuth, aiRouter);
+app.use("/api/v1/ai", aiRouter);
 app.use("/api/v1/auth", authRouter);
-app.use("/api/v1/documents", requireAuth, documentsRouter);
+app.use("/api/v1/documents", documentsRouter);
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 

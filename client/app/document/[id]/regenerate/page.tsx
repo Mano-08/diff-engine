@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { regenerateDocument } from "@/lib/api";
 import VideoUploadForm from "@/components/VideoUploadForm";
 import { useUnauthorizedDialog } from "@/components/UnauthorizedDialogContext";
-import { getCurrentUser } from "@/lib/auth";
+// import { getCurrentUser } from "@/lib/auth";
 
 export default function RegenerateDocumentPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,11 +13,11 @@ export default function RegenerateDocumentPage() {
   const { showUnauthorizedDialog } = useUnauthorizedDialog();
 
   async function handleSubmit(file: File) {
-    const user = await getCurrentUser();
-    if (!user) {
-      showUnauthorizedDialog();
-      return;
-    }
+    // const user = await getCurrentUser();
+    // if (!user) {
+    //   showUnauthorizedDialog();
+    //   return;
+    // }
     await regenerateDocument(id, file, showUnauthorizedDialog);
     // land back on the doc hub — the new version will show up as "processing"
     // in the version tabs once the GET call picks it up
