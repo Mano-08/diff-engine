@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function ErrorBox({ error }: { error: string }) {
   // Match error string: 401 {"type":"error","error":{"type":"authentication_error","message":"API key is invalid."},"request_id":null}
   // Extracts the error code and the JSON error object
