@@ -5,7 +5,7 @@ import { fetchDocument } from "@/lib/api";
 import type { Document } from "@/lib/types";
 import { useUnauthorizedDialog } from "@/components/UnauthorizedDialogContext";
 
-const POLL_INTERVAL_MS = 2500;
+const POLL_INTERVAL_MS = 5000;
 
 export function useDocument(documentId: string) {
   const [document, setDocument] = useState<Document | null>(null);

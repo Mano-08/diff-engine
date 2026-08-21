@@ -34,20 +34,20 @@ export default function LogOutBox() {
           onClick={logout}
           className="shrink-0 rounded-lg bg-white px-4 py-2 text-xs font-medium text-black transition hover:opacity-95 active:scale-95"
         >
-          Log out <LogOut strokeWidth={2.8} size={13} color="black" />
+          Logout <LogOut strokeWidth={2.8} size={13} color="black" />
         </button>
       </div>
     );
   }
 
   return (
-    <div className="fixed top-3 right-2 p-1 rounded-lg bg-slate-100">
+    <div className="fixed top-5.5 right-2">
       {data ? (
         <button
           onClick={logout}
-          className="shrink-0 rounded-lg bg-white px-4 py-2 text-xs font-medium text-black transition hover:opacity-95 active:scale-95"
+          className="shrink-0 rounded-lg cursor-pointer bg-neutral-50 px-4 py-2 text-xs font-medium text-black transition hover:opacity-95 active:scale-95"
         >
-          Log out <LogOut strokeWidth={2.8} size={13} color="black" />
+          Logout <LogOut strokeWidth={2.8} size={13} color="black" />
         </button>
       ) : (
         <button
@@ -58,9 +58,9 @@ export default function LogOutBox() {
               window.location.hash;
             window.location.href = `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`;
           }}
-          className="shrink-0 rounded-lg bg-white inline-flex items-center justify-center gap-1 px-4 py-2 text-xs font-medium text-black transition hover:opacity-95 active:scale-95"
+          className="shrink-0 px-3 py-1.5 mr-3 cursor-pointer rounded-lg bg-neutral-50 inline-flex items-center justify-center gap-1 border border-neutral-200 text-xs font-medium text-black transition hover:opacity-95 active:scale-95"
         >
-          Log in <LogIn strokeWidth={2.8} size={13} color="black" />
+          Login <LogIn strokeWidth={2.8} size={13} color="black" />
         </button>
       )}
     </div>

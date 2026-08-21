@@ -6,6 +6,7 @@ import type { DocVersion } from "@/lib/types";
 import { debounce } from "lodash";
 import { useMemo } from "react";
 import FloatingVideoPlayer from "./editor/FloatingVideoPlayer";
+import ErrorBox from "./ErrorBox";
 
 export default function DocumentVersionView({
   version,
@@ -35,13 +36,7 @@ export default function DocumentVersionView({
   }
 
   if (version.status === "failed") {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-sm text-red-600">
-          Generation failed: {version.errorMessage ?? "unknown error"}
-        </p>
-      </div>
-    );
+    return <ErrorBox error={version.errorMessage ?? "unknown error"} />;
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { requestOtp, verifyOtp } from "@/lib/auth";
+import ErrorBox from "./ErrorBox";
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
@@ -87,7 +88,7 @@ export default function LoginPage() {
           </>
         )}
 
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        {error && <ErrorBox error={error} />}
       </div>
     </main>
   );

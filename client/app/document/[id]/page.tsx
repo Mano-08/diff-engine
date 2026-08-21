@@ -7,6 +7,7 @@ import { useDocument } from "@/hooks/useDocument";
 import VersionTabs from "@/components/VersionTabs";
 import DocumentVersionView from "@/components/DocumentVersionView";
 import DiffView from "@/components/DiffView";
+import ErrorBox from "@/components/ErrorBox";
 
 export default function DocumentPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +27,7 @@ export default function DocumentPage() {
     }
   }, [document, activeVersionId]);
 
-  if (error) return <CenteredMessage text={error} isError />;
+  if (error) return <ErrorBox error={error} />;
   if (!document) return <CenteredMessage text="Loading..." />;
 
   const activeVersion =
@@ -46,7 +47,7 @@ export default function DocumentPage() {
         </h1>
         <Link
           href={`/document/${id}/regenerate`}
-          className="px-3 py-1.5 rounded-lg bg-[#DA5CC7] text-white text-xs font-medium hover:bg-[#DA5CC7]/90"
+          className="px-3 py-1.5 mr-21 rounded-lg bg-[#DA5CC7] text-white text-xs font-medium hover:bg-[#DA5CC7]/90"
         >
           Generate new version
         </Link>
