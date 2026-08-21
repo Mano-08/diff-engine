@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import fs from "fs";
 import authRouter from "./routes/auth.js";
-import { requireAuth } from "./middleware/requireAuth.js";
+// import { requireAuth } from "./middleware/requireAuth.js";
 import documentsRouter from "./routes/document.js";
 import aiRouter from "./routes/ai.js";
 
