@@ -1,9 +1,9 @@
-import "react";
+import React from "react";
 
 export default function ErrorBox({ error }: { error: string }) {
-  // Remove /s flag for compatibility with pre-ES2018
-  // Instead, match newlines with [\s\S] for "dotall" behavior
-  const match = error.match(/^.*?:\s*(\d+)\s+(\{[\s\S]*\})\s*$/);
+  // Match error string: 401 {"type":"error","error":{"type":"authentication_error","message":"API key is invalid."},"request_id":null}
+  // Extracts the error code and the JSON error object
+  const match = error.match(/^(\d{3})\s+(\{[\s\S]*\})$/);
 
   let code: string | null = null;
   let message: string | null = null;
@@ -23,7 +23,6 @@ export default function ErrorBox({ error }: { error: string }) {
     <div className="h-full w-full flex items-center justify-center">
       <div className="rounded-xl border min-w-[350px] border-solid max-w-88 mx-auto border-neutral-200 bg-white p-4 text-sm text-black">
         <p className="font-semibold text-red-600">Error</p>
-
         {code && (
           <p className="mt-3">
             <span className="font-semibold">Error code:</span> {code}

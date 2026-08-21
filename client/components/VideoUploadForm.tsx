@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import ErrorBox from "./ErrorBox";
 
 interface Props {
   titleField?: boolean;
@@ -81,7 +82,7 @@ export default function VideoUploadForm({
         )}
       </div>
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && <ErrorBox error={error} />}
 
       <button
         onClick={handleSubmit}

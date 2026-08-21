@@ -47,7 +47,7 @@ export default function DocumentPage() {
         </h1>
         <Link
           href={`/document/${id}/regenerate`}
-          className="px-3 py-1.5 rounded-lg bg-[#DA5CC7] text-white text-xs font-medium hover:bg-[#DA5CC7]/90"
+          className="px-3 py-1.5 mr-21 rounded-lg bg-[#DA5CC7] text-white text-xs font-medium hover:bg-[#DA5CC7]/90"
         >
           Generate new version
         </Link>
