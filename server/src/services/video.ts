@@ -6,11 +6,11 @@ import { nanoid } from "nanoid";
 
 const TMP_DIR = path.resolve("tmp");
 
-const SAMPLE_INTERVAL_SEC = 0.5;
-const SETTLE_CHECK_DELAY_MS = 400;
+const SAMPLE_INTERVAL_SEC = 0.25;
+const SETTLE_CHECK_DELAY_MS = 200;
 const SETTLE_DIFF_THRESHOLD = 0.02;
-const MAX_SETTLE_ATTEMPTS = 3;
-const MERGE_WINDOW_SEC = 0.75;
+const MAX_SETTLE_ATTEMPTS = 5;
+const MERGE_WINDOW_SEC = 0.25;
 const SPIKE_STD_DEV_MULTIPLIER = 2;
 const SPIKE_MIN_DIFF_FLOOR = 0.05;
 
